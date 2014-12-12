@@ -2,7 +2,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <unistd.h>
-
+#include <math.h>
 
 #define EPS 0.0001
 
@@ -21,9 +21,8 @@ typedef struct
 typedef struct
 {
 	v3_t normal;
-	v3_t p0;
-	v3_t p1;
-	v3_t p2;
+	v3_t p[3];
+	uint16_t attr;
 } __attribute__((__packed__))
 stl_face_t;
 
@@ -56,6 +55,106 @@ v3_eq(
 }
 
 
+static int
+edge_eq(
+	const stl_face_t * const t0,
+	const stl_face_t * const t1,
+	int e0,
+	int e1
+)
+{
+	const v3_t * const v0 = &t0->p[e0];
+	const v3_t * const v1 = &t0->p[e1];
+
+	if (v3_eq(v0, &t1->p[0]) && v3_eq(v1, &t1->p[1]))
+		return 1;
+	if (v3_eq(v0, &t1->p[1]) && v3_eq(v1, &t1->p[0]))
+		return 1;
+
+	if (v3_eq(v0, &t1->p[0]) && v3_eq(v1, &t1->p[2]))
+		return 1;
+	if (v3_eq(v0, &t1->p[2]) && v3_eq(v1, &t1->p[0]))
+		return 1;
+
+	if (v3_eq(v0, &t1->p[1]) && v3_eq(v1, &t1->p[2]))
+		return 1;
+	if (v3_eq(v0, &t1->p[2]) && v3_eq(v1, &t1->p[1]))
+		return 1;
+
+	return 0;
+}
+
+
+double
+v3_len(
+	const v3_t * const v0,
+	const v3_t * const v1
+)
+{
+	float dx = v0->p[0] - v1->p[0];
+	float dy = v0->p[1] - v1->p[1];
+	float dz = v0->p[2] - v1->p[2];
+
+	return sqrt(dx*dx + dy*dy + dz*dz);
+}
+
+
+/** recursively try to fix up the triangles.
+ *
+ * returns 0 if this should be unwound, 1 if was successful
+ */
+int
+recurse(
+	const stl_face_t * const faces,
+	int start,
+	const int num_faces,
+	int * const used
+)
+{
+	static int depth;
+
+	depth++;
+
+	const stl_face_t * const t = &faces[start];
+	double d0 = v3_len(&t->p[0], &t->p[1]);
+	double d1 = v3_len(&t->p[1], &t->p[2]);
+	double d2 = v3_len(&t->p[1], &t->p[2]);
+
+	// flag that we are looking into this one
+	used[start] = 1;
+
+	// start with the first triangle, find the ones that connect
+
+	// for each edge, find the triangle that matches
+	for (int j = 0 ; j < num_faces ; j++)
+	{
+		if (used[j])
+			continue;
+
+		const stl_face_t * const t2 = &faces[j];
+		if (edge_eq(t, t2, 0, 1))
+		{
+			fprintf(stderr, "%d.0 -> %d\n", start, j);
+			recurse(faces, j, num_faces, used);
+		}
+		if (edge_eq(t, t2, 0, 2))
+		{
+			fprintf(stderr, "%d.1 -> %d\n", start, j);
+			recurse(faces, j, num_faces, used);
+		}
+		if (edge_eq(t, t2, 1, 2))
+		{
+			fprintf(stderr, "%d.2 -> %d\n", start, j);
+			recurse(faces, j, num_faces, used);
+		}
+	}
+
+	// no success
+	return 0;
+}
+
+
+
 int main(void)
 {
 	const size_t max_len = 1 << 20;
@@ -72,11 +171,14 @@ int main(void)
 	fprintf(stderr, "header: '%s'\n", hdr->header);
 	fprintf(stderr, "num: %d\n", num_triangles);
 
+	int * const used = calloc(num_triangles, sizeof(*used));
+
+	recurse(faces, 0, num_triangles, used);
+
+#if 0
 	// worst case -- all separate polygons
 	poly_t * const polys = calloc(num_triangles, sizeof(*polys));
-
-	// Collapse coplanar triangles into larger polygons
-	v3_t * const vertices = calloc(num_triangles, 3);
+	v3_t * const vertices = calloc(num_triangles*3, sizeof(*vertices));
 	int num_vertices = 0;
 
 	for(int i = 0 ; i < num_triangles ; i++)
@@ -121,6 +223,8 @@ int main(void)
 	}
 
 	fprintf(stderr, "unique vertices: %d\n", num_vertices);
+#endif
 
+	
 	return 0;
 }
