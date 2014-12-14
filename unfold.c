@@ -98,6 +98,30 @@ v3_len(
 	return sqrt(dx*dx + dy*dy + dz*dz);
 }
 
+typedef struct
+{
+	float v[2][2];
+	v3_t p[2];
+} rotate_t;
+
+
+typedef {
+	float p[3][2];
+} project_t;
+
+void
+project(
+	const stl_face_t * const t,
+	const rotate_t * const r,
+	project * const p
+)
+{
+	double d0 = v3_len(&t->p[0], &t->p[1]);
+	double d1 = v3_len(&t->p[1], &t->p[2]);
+	double d2 = v3_len(&t->p[1], &t->p[2]);
+}
+
+
 
 /** recursively try to fix up the triangles.
  *
@@ -108,7 +132,8 @@ recurse(
 	const stl_face_t * const faces,
 	int start,
 	const int num_faces,
-	int * const used
+	int * const used,
+	rotate_t * r
 )
 {
 	static int depth;
@@ -116,14 +141,12 @@ recurse(
 	depth++;
 
 	const stl_face_t * const t = &faces[start];
-	double d0 = v3_len(&t->p[0], &t->p[1]);
-	double d1 = v3_len(&t->p[1], &t->p[2]);
-	double d2 = v3_len(&t->p[1], &t->p[2]);
 
 	// flag that we are looking into this one
 	used[start] = 1;
 
 	// start with the first triangle, find the ones that connect
+	project(t, r);
 
 	// for each edge, find the triangle that matches
 	for (int j = 0 ; j < num_faces ; j++)
@@ -173,7 +196,14 @@ int main(void)
 
 	int * const used = calloc(num_triangles, sizeof(*used));
 
-	recurse(faces, 0, num_triangles, used);
+	rotate_t r = {
+		.x = 0,
+		.y = 0,
+		.p0 = faces[0].p[0],
+		.p1 = faces[0].p[1]
+	};
+
+	recurse(faces, 0, num_triangles, used, &r);
 
 #if 0
 	// worst case -- all separate polygons
