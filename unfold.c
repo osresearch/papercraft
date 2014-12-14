@@ -8,6 +8,10 @@
 #include <unistd.h>
 #include <math.h>
 
+#ifndef M_PI
+#define 	M_PI   3.1415926535897932384
+#endif
+
 #define EPS 0.0001
 
 typedef struct
@@ -152,16 +156,58 @@ recurse(
 
 	// print out a svg group for this triangle, starting with
 	// the incoming edge
-	printf("%p %d %f %f %f\n", f, start_edge, f->sides[0], f->sides[1], f->sides[2]);
+	float a = f->sides[(start_edge + 0) % 3];
+	float c = f->sides[(start_edge + 1) % 3];
+	float b = f->sides[(start_edge + 2) % 3];
+	float x2 = (a*a + b*b - c*c) / (2*a);
+	float y2 = sqrt(b*b - x2*x2);
+
+	printf("<polyline points=\"0,0 %f,0 %f,%f\ 0,0\" fill=\"none\" stroke=\"#FF0000\" />\n",
+		a,
+		x2,
+		y2
+	);
+	//printf("%p %d %f %f %f\n", f, start_edge, f->sides[0], f->sides[1], f->sides[2]);
 
 	// for each edge, find the triangle that matches
 	for (int edge = 0 ; edge < 3 ; edge++)
 	{
-		face_t * const f2 = f->next[edge];
+		face_t * const f2 = f->next[(edge+start_edge) % 3];
 		if (f2->used)
 			continue;
 
+		// create a group that translates and rotates
+		// such that it lines up with this edge
+		float trans_x, trans_y, rotate;
+		if (edge == 0)
+		{
+			trans_x = a;
+			trans_y = 0;
+			rotate = 180;
+		} else
+		if (edge == 1)
+		{
+			trans_x = x2;
+			trans_y = y2;
+			rotate = atan2(y2, a-x2) * 180 / M_PI;
+		} else
+		if (edge == 2)
+		{
+			trans_x = 0;
+			trans_y = 0;
+			rotate = atan2(y2, x2) * 180 / M_PI;
+		}
+
+		printf("<!-- edge %d --><g transform=\"translate(%f,%f) rotate(%f)\">\n",
+			edge,
+			trans_x,
+			trans_y,
+			rotate
+		);
+
 		recurse(f2, f->next_edge[edge]);
+
+		printf("</g>\n");
 	}
 
 	// no success
@@ -258,59 +304,11 @@ int main(void)
 	// we now have a graph that shows the connection between
 	// all of the faces and their sizes. start converting them
 
+	printf("<svg xmlns=\"http://www.w3.org/2000/svg\">\n");
 	//for (int i = 0 ; i < num_triangles ; i++)
 		recurse(&faces[0], 0);
 
-#if 0
-	// worst case -- all separate polygons
-	poly_t * const polys = calloc(num_triangles, sizeof(*polys));
-	v3_t * const vertices = calloc(num_triangles*3, sizeof(*vertices));
-	int num_vertices = 0;
+	printf("</svg>\n");
 
-	for(int i = 0 ; i < num_triangles ; i++)
-	{
-		// see if this matches an existing vertex
-		const stl_face_t * const t = &faces[i];
-		poly_t * const p = &polys[i];
-		p->n = 3;
-		p->p[0] = p->p[1] = p->p[2] = -1;
-
-		for (int j = 0 ; j < num_vertices ; j++)
-		{
-			const v3_t * const v = &vertices[j];
-			if (p->p[0] == -1 && v3_eq(v, &t->p0))
-				p->p[1] = j;
-			if (p->p[1] == -1 && v3_eq(v, &t->p1))
-				p->p[1] = j;
-			if (p->p[2] == -1 && v3_eq(v, &t->p2))
-				p->p[2] = j;
-
-			// check if we've found all of them
-			if (p->p[0] >= 0 && p->p[1] >= 0 && p->p[2] >= 0)
-				break;
-		}
-
-		// create new points if we haven't found matches
-		if (p->p[0] < 0)
-		{
-			p->p[0] = num_vertices;
-			vertices[num_vertices++] = t->p0;
-		}
-		if (p->p[1] < 0)
-		{
-			p->p[1] = num_vertices;
-			vertices[num_vertices++] = t->p1;
-		}
-		if (p->p[3] < 0)
-		{
-			p->p[3] = num_vertices;
-			vertices[num_vertices++] = t->p2;
-		}
-	}
-
-	fprintf(stderr, "unique vertices: %d\n", num_vertices);
-#endif
-
-	
 	return 0;
 }
