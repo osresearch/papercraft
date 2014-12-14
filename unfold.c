@@ -137,6 +137,23 @@ v3_len(
 }
 
 
+void
+svg_line(
+	float x1,
+	float y1,
+	float x2,
+	float y2
+)
+{
+	printf("<line x1=\"%f\" y1=\"%f\" x2=\"%f\" y2=\"%f\" style=\"stroke:rgb(255,255,0);\"/>\n",
+		x1,
+		y1,
+		x2,
+		y2
+	);
+}
+
+
 /** recursively try to fix up the triangles.
  *
  * returns 0 if this should be unwound, 1 if was successful
@@ -162,18 +179,26 @@ recurse(
 	float x2 = (a*a + b*b - c*c) / (2*a);
 	float y2 = sqrt(b*b - x2*x2);
 
-	printf("<polyline points=\"0,0 %f,0 %f,%f\ 0,0\" fill=\"none\" stroke=\"#FF0000\" />\n",
-		a,
-		x2,
-		y2
-	);
+	// before drawing the triangle, check to see if any of the
+	// edges are coplanar and if so, don't draw the edge
+	if (!f->coplanar[(0+start_edge) % 3])
+		svg_line(0, 0, a, 0);
+	if (!f->coplanar[(1+start_edge) % 3])
+		svg_line(a, 0, x2, y2);
+	if (!f->coplanar[(2+start_edge) % 3])
+		svg_line(x2, y2, 0, 0);
+
 	//printf("%p %d %f %f %f\n", f, start_edge, f->sides[0], f->sides[1], f->sides[2]);
 
+   for(int pass = 0 ; pass < 2 ; pass++)
+   {
 	// for each edge, find the triangle that matches
 	for (int edge = 0 ; edge < 3 ; edge++)
 	{
 		face_t * const f2 = f->next[(edge+start_edge) % 3];
 		if (f2->used)
+			continue;
+		if (pass == 0 && !f->coplanar[(edge+start_edge) % 3])
 			continue;
 
 		// create a group that translates and rotates
@@ -209,9 +234,44 @@ recurse(
 
 		printf("</g>\n");
 	}
+    }
 
 	// no success
 	return 0;
+}
+
+v3_t v3_sub(v3_t a, v3_t b)
+{
+	v3_t c = { .p = {
+		a.p[0] - b.p[0],
+		a.p[1] - b.p[1],
+		a.p[2] - b.p[2],
+	} };
+	return c;
+}
+
+float v3_dot(v3_t a, v3_t b)
+{
+	return a.p[0]*b.p[0] + a.p[1]*b.p[1] + a.p[2]*b.p[2];
+}
+
+v3_t v3_cross(v3_t u, v3_t v)
+{
+	float u1 = u.p[0];
+	float u2 = u.p[1];
+	float u3 = u.p[2];
+
+	float v1 = v.p[0];
+	float v2 = v.p[1];
+	float v3 = v.p[2];
+
+	v3_t c = { .p = {
+		u2*v3 - u3*v2,
+		u3*v1 - u1*v3,
+		u1*v2 - u2*v1,
+	}};
+
+	return c;
 }
 
 
@@ -221,8 +281,34 @@ coplanar_check(
 	const stl_face_t * const f2
 )
 {
-	// no, for now
-	return 0;
+	// find the four distinct points
+	v3_t x1 = f1->p[0];
+	v3_t x2 = f1->p[1];
+	v3_t x3 = f1->p[2];
+	v3_t x4;
+
+	for (int i = 0 ; i < 3 ; i++)
+	{
+		x4 = f2->p[i];
+		if (v3_eq(&x1, &x4))
+			continue;
+		if (v3_eq(&x2, &x4))
+			continue;
+		if (v3_eq(&x3, &x4))
+			continue;
+		break;
+	}
+
+	// (x3-x1) . ((x2-x1) X (x4-x3)) == 0
+	v3_t dx31 = v3_sub(x3, x1);
+	v3_t dx21 = v3_sub(x2, x1);
+	v3_t dx43 = v3_sub(x4, x3);
+	v3_t cross = v3_cross(dx21, dx43);
+	float dot = v3_dot(dx31, cross);
+	
+	int check = -EPS < dot && dot < +EPS;
+	//fprintf( stderr, "%p %p %s\n", f1, f2, check ? "yes" : "no");
+	return check;
 }
 
 
