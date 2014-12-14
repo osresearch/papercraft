@@ -1,3 +1,7 @@
+/** \file
+ * Unfold an STL file into a set of laser-cutable polygons.
+ *
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -27,13 +31,16 @@ typedef struct
 stl_face_t;
 
 
-#define MAX_POINTS 24
+typedef struct face face_t;
 
-typedef struct
+struct face
 {
-	int n;
-	int p[MAX_POINTS];
-} poly_t;
+	float sides[3];
+	face_t * next[3];
+	int next_edge[3];
+	int coplanar[3];
+	int used;
+};
 
 
 static int
@@ -85,6 +92,33 @@ edge_eq(
 }
 
 
+/* Compare two edges in two triangles.
+ *
+ * note that if the windings are all the same, the edges will
+ * compare in the opposite order (for example, the edge from 0 to 1
+ * compares to the edge from 2 to 1 in the other triangle).
+ */
+static int
+edge_eq2(
+	const stl_face_t * const t0,
+	const stl_face_t * const t1,
+	int e0,
+	int e1
+)
+{
+	const v3_t * const v00 = &t0->p[e0];
+	const v3_t * const v01 = &t0->p[(e0+1) % 3];
+
+	const v3_t * const v10 = &t1->p[e1];
+	const v3_t * const v11 = &t1->p[(e1+1) % 3];
+
+	if (v3_eq(v00, v11) && v3_eq(v01, v10))
+		return 1;
+
+	return 0;
+}
+
+
 double
 v3_len(
 	const v3_t * const v0,
@@ -98,30 +132,6 @@ v3_len(
 	return sqrt(dx*dx + dy*dy + dz*dz);
 }
 
-typedef struct
-{
-	float v[2][2];
-	v3_t p[2];
-} rotate_t;
-
-
-typedef {
-	float p[3][2];
-} project_t;
-
-void
-project(
-	const stl_face_t * const t,
-	const rotate_t * const r,
-	project * const p
-)
-{
-	double d0 = v3_len(&t->p[0], &t->p[1]);
-	double d1 = v3_len(&t->p[1], &t->p[2]);
-	double d2 = v3_len(&t->p[1], &t->p[2]);
-}
-
-
 
 /** recursively try to fix up the triangles.
  *
@@ -129,50 +139,43 @@ project(
  */
 int
 recurse(
-	const stl_face_t * const faces,
-	int start,
-	const int num_faces,
-	int * const used,
-	rotate_t * r
+	face_t * const f,
+	int start_edge
 )
 {
 	static int depth;
 
 	depth++;
 
-	const stl_face_t * const t = &faces[start];
-
 	// flag that we are looking into this one
-	used[start] = 1;
+	f->used = 1;
 
-	// start with the first triangle, find the ones that connect
-	project(t, r);
+	// print out a svg group for this triangle, starting with
+	// the incoming edge
+	printf("%p %d %f %f %f\n", f, start_edge, f->sides[0], f->sides[1], f->sides[2]);
 
 	// for each edge, find the triangle that matches
-	for (int j = 0 ; j < num_faces ; j++)
+	for (int edge = 0 ; edge < 3 ; edge++)
 	{
-		if (used[j])
+		face_t * const f2 = f->next[edge];
+		if (f2->used)
 			continue;
 
-		const stl_face_t * const t2 = &faces[j];
-		if (edge_eq(t, t2, 0, 1))
-		{
-			fprintf(stderr, "%d.0 -> %d\n", start, j);
-			recurse(faces, j, num_faces, used);
-		}
-		if (edge_eq(t, t2, 0, 2))
-		{
-			fprintf(stderr, "%d.1 -> %d\n", start, j);
-			recurse(faces, j, num_faces, used);
-		}
-		if (edge_eq(t, t2, 1, 2))
-		{
-			fprintf(stderr, "%d.2 -> %d\n", start, j);
-			recurse(faces, j, num_faces, used);
-		}
+		recurse(f2, f->next_edge[edge]);
 	}
 
 	// no success
+	return 0;
+}
+
+
+int
+coplanar_check(
+	const stl_face_t * const f1,
+	const stl_face_t * const f2
+)
+{
+	// no, for now
 	return 0;
 }
 
@@ -188,22 +191,75 @@ int main(void)
 		return EXIT_FAILURE;
 
 	const stl_header_t * const hdr = (const void*) buf;
-	const stl_face_t * const faces = (const void*)(hdr+1);
+	const stl_face_t * const stl_faces = (const void*)(hdr+1);
 	const int num_triangles = hdr->num_triangles;
 
 	fprintf(stderr, "header: '%s'\n", hdr->header);
 	fprintf(stderr, "num: %d\n", num_triangles);
 
-	int * const used = calloc(num_triangles, sizeof(*used));
+	face_t * const faces = calloc(num_triangles, sizeof(*faces));
 
-	rotate_t r = {
-		.x = 0,
-		.y = 0,
-		.p0 = faces[0].p[0],
-		.p1 = faces[0].p[1]
-	};
+	// convert the stl triangles into faces
+	for (int i = 0 ; i < num_triangles ; i++)
+	{
+		const stl_face_t * const stl = &stl_faces[i];
+		face_t * const f = &faces[i];
 
-	recurse(faces, 0, num_triangles, used, &r);
+		f->sides[0] = v3_len(&stl->p[0], &stl->p[1]);
+		f->sides[1] = v3_len(&stl->p[1], &stl->p[2]);
+		f->sides[2] = v3_len(&stl->p[2], &stl->p[0]);
+	}
+
+	// look to see if there is a matching point
+	// in the faces that we've already built
+	for (int i = 0 ; i < num_triangles ; i++)
+	{
+		const stl_face_t * const stl = &stl_faces[i];
+		face_t * const f = &faces[i];
+
+		for (int j = 0 ; j < num_triangles ; j++)
+		{
+			if (i == j)
+				continue;
+
+			const stl_face_t * const stl2 = &stl_faces[j];
+			face_t * const f2 = &faces[j];
+
+			for (int edge = 0 ; edge < 3 ; edge++)
+			{
+				if (f->next[edge])
+					continue;
+
+				for (int edge2 = 0 ; edge2 < 3 ; edge2++)
+				{
+					if (f2->next[edge2])
+						continue;
+
+					if (!edge_eq2(stl, stl2, edge, edge2))
+						continue;
+
+					f->next[edge] = f2;
+					f->next_edge[edge] = edge2;
+					f2->next[edge2] = f;
+					f2->next_edge[edge2] = edge;
+
+					f->coplanar[edge] =
+					f2->coplanar[edge2] = coplanar_check(stl, stl2);
+				}
+			}
+		}
+
+		// all three edges should be matched
+		if (f->next[0] && f->next[1] && f->next[2])
+			continue;
+		fprintf(stderr, "%d: missing edges?\n", i);
+	}
+
+	// we now have a graph that shows the connection between
+	// all of the faces and their sizes. start converting them
+
+	//for (int i = 0 ; i < num_triangles ; i++)
+		recurse(&faces[0], 0);
 
 #if 0
 	// worst case -- all separate polygons
