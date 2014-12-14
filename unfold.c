@@ -189,7 +189,7 @@ recurse(
 		{
 			trans_x = x2;
 			trans_y = y2;
-			rotate = atan2(y2, a-x2) * 180 / M_PI;
+			rotate = -atan2(y2, a-x2) * 180 / M_PI;
 		} else
 		if (edge == 2)
 		{
@@ -205,7 +205,7 @@ recurse(
 			rotate
 		);
 
-		recurse(f2, f->next_edge[edge]);
+		recurse(f2, f->next_edge[(edge+start_edge) % 3]);
 
 		printf("</g>\n");
 	}
