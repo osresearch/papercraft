@@ -7,6 +7,7 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <math.h>
+#include <err.h>
 
 #ifndef M_PI
 #define 	M_PI   3.1415926535897932384
@@ -221,6 +222,8 @@ recurse(
 			trans_x = 0;
 			trans_y = 0;
 			rotate = atan2(y2, x2) * 180 / M_PI;
+		} else {
+			errx(EXIT_FAILURE, "edge %d invalid?\n", edge);
 		}
 
 		printf("<!-- edge %d --><g transform=\"translate(%f,%f) rotate(%f)\">\n",
@@ -384,7 +387,7 @@ int main(void)
 		// all three edges should be matched
 		if (f->next[0] && f->next[1] && f->next[2])
 			continue;
-		fprintf(stderr, "%d: missing edges?\n", i);
+		errx(EXIT_FAILURE, "%d missing edges?\n", i);
 	}
 
 	// we now have a graph that shows the connection between
