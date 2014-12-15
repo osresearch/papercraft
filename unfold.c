@@ -8,12 +8,12 @@
 #include <unistd.h>
 #include <math.h>
 #include <err.h>
+#include <assert.h>
+#include "v3.h"
 
 #ifndef M_PI
 #define 	M_PI   3.1415926535897932384
 #endif
-
-#define EPS 0.0001
 
 typedef struct
 {
@@ -22,10 +22,6 @@ typedef struct
 } __attribute__((__packed__))
 stl_header_t;
 
-typedef struct
-{
-	float p[3];
-} v3_t;
 
 typedef struct
 {
@@ -37,6 +33,7 @@ stl_face_t;
 
 
 typedef struct face face_t;
+typedef struct poly poly_t;
 
 struct face
 {
@@ -47,54 +44,25 @@ struct face
 	int used;
 };
 
-
-static int
-v3_eq(
-	const v3_t * v1,
-	const v3_t * v2
-)
+// once this triangle has been used, it will be placed
+// in a polygon group and fixed in a position relative to that group
+struct poly
 {
-	float dx = v1->p[0] - v2->p[0];
-	float dy = v1->p[1] - v2->p[1];
-	float dz = v1->p[2] - v2->p[2];
+	int start_edge;
+	int printed;
 
-	if (-EPS < dx && dx < EPS
-	&&  -EPS < dy && dy < EPS
-	&&  -EPS < dz && dz < EPS)
-		return 1;
+	// local coordinates of the triangle vertices
+	float a;
+	float x2;
+	float y2;
+	float rot;
 
-	return 0;
-}
+	// absolute coordintes of the triangle vertices
+	float p[3][2];
 
-
-static int
-edge_eq(
-	const stl_face_t * const t0,
-	const stl_face_t * const t1,
-	int e0,
-	int e1
-)
-{
-	const v3_t * const v0 = &t0->p[e0];
-	const v3_t * const v1 = &t0->p[e1];
-
-	if (v3_eq(v0, &t1->p[0]) && v3_eq(v1, &t1->p[1]))
-		return 1;
-	if (v3_eq(v0, &t1->p[1]) && v3_eq(v1, &t1->p[0]))
-		return 1;
-
-	if (v3_eq(v0, &t1->p[0]) && v3_eq(v1, &t1->p[2]))
-		return 1;
-	if (v3_eq(v0, &t1->p[2]) && v3_eq(v1, &t1->p[0]))
-		return 1;
-
-	if (v3_eq(v0, &t1->p[1]) && v3_eq(v1, &t1->p[2]))
-		return 1;
-	if (v3_eq(v0, &t1->p[2]) && v3_eq(v1, &t1->p[1]))
-		return 1;
-
-	return 0;
-}
+	face_t * face;
+	poly_t * next[3];
+};
 
 
 /* Compare two edges in two triangles.
@@ -124,157 +92,185 @@ edge_eq2(
 }
 
 
-double
-v3_len(
-	const v3_t * const v0,
-	const v3_t * const v1
-)
-{
-	float dx = v0->p[0] - v1->p[0];
-	float dy = v0->p[1] - v1->p[1];
-	float dz = v0->p[2] - v1->p[2];
-
-	return sqrt(dx*dx + dy*dy + dz*dz);
-}
-
-
 void
 svg_line(
-	float x1,
-	float y1,
-	float x2,
-	float y2
+	const char * color,
+	float * p1,
+	float * p2
 )
 {
-	printf("<line x1=\"%f\" y1=\"%f\" x2=\"%f\" y2=\"%f\" style=\"stroke:rgb(255,255,0);\"/>\n",
-		x1,
-		y1,
-		x2,
-		y2
+	printf("<line x1=\"%f\" y1=\"%f\" x2=\"%f\" y2=\"%f\" stroke=\"%s\"/>\n",
+		p1[0],
+		p1[1],
+		p2[0],
+		p2[1],
+		color
 	);
 }
 
 
-/** recursively try to fix up the triangles.
- *
- * returns 0 if this should be unwound, 1 if was successful
- */
-int
-recurse(
-	face_t * const f,
-	int start_edge
+void
+rotate(
+	float * p,
+	float a,
+	float x,
+	float y
 )
 {
-	static int depth;
+	p[0] = cos(a) * x - sin(a) * y;
+	p[1] = sin(a) * x + cos(a) * y;
+}
 
-	depth++;
 
-	// flag that we are looking into this one
-	f->used = 1;
+/* Rotate and translate a triangle */
+void
+poly_position(
+	poly_t * const g,
+	float trans_x,
+	float trans_y,
+	float rot
+)
+{
+	face_t * const f = g->face;
+	const int start_edge = g->start_edge;
 
-	// print out a svg group for this triangle, starting with
-	// the incoming edge
 	float a = f->sides[(start_edge + 0) % 3];
 	float c = f->sides[(start_edge + 1) % 3];
 	float b = f->sides[(start_edge + 2) % 3];
 	float x2 = (a*a + b*b - c*c) / (2*a);
 	float y2 = sqrt(b*b - x2*x2);
 
-	// before drawing the triangle, check to see if any of the
-	// edges are coplanar and if so, don't draw the edge
-	if (!f->coplanar[(0+start_edge) % 3])
-		svg_line(0, 0, a, 0);
-	if (!f->coplanar[(1+start_edge) % 3])
-		svg_line(a, 0, x2, y2);
-	if (!f->coplanar[(2+start_edge) % 3])
-		svg_line(x2, y2, 0, 0);
+	g->rot = rot;
+	g->a = a;
+	g->x2 = x2;
+	g->y2 = y2;
 
-	//printf("%p %d %f %f %f\n", f, start_edge, f->sides[0], f->sides[1], f->sides[2]);
+	rotate(g->p[0], rot, trans_x +  0, trans_y +  0);
+	rotate(g->p[1], rot, trans_x +  a, trans_y +  0);
+	rotate(g->p[2], rot, trans_x + x2, trans_y + y2);
+}
+
+
+/** recursively try to fix up the triangles.
+ *
+ * returns the maximum number of triangles added
+ */
+int
+poly_build(
+	poly_t * const g
+)
+{
+	face_t * const f = g->face;
+	const int start_edge = g->start_edge;
+	f->used = 1;
+
+	fprintf(stderr, "%p: adding to poly\n", f);
 
    for(int pass = 0 ; pass < 2 ; pass++)
    {
 	// for each edge, find the triangle that matches
-	for (int edge = 0 ; edge < 3 ; edge++)
+	for (int i = 0 ; i < 3 ; i++)
 	{
-		face_t * const f2 = f->next[(edge+start_edge) % 3];
+		const int edge = (i + start_edge) % 3;
+		face_t * const f2 = f->next[edge];
+		assert(f2 != NULL);
 		if (f2->used)
 			continue;
-		if (pass == 0 && !f->coplanar[(edge+start_edge) % 3])
+		if (pass == 0 && !f->coplanar[edge])
 			continue;
 
 		// create a group that translates and rotates
 		// such that it lines up with this edge
 		float trans_x, trans_y, rotate;
-		if (edge == 0)
+		if (i == 0)
 		{
-			trans_x = a;
+			trans_x = g->a;
 			trans_y = 0;
 			rotate = 180;
 		} else
-		if (edge == 1)
+		if (i == 1)
 		{
-			trans_x = x2;
-			trans_y = y2;
-			rotate = -atan2(y2, a-x2) * 180 / M_PI;
+			trans_x = g->x2;
+			trans_y = g->y2;
+			rotate = -atan2(g->y2, g->a - g->x2);
 		} else
-		if (edge == 2)
+		if (i == 2)
 		{
 			trans_x = 0;
 			trans_y = 0;
-			rotate = atan2(y2, x2) * 180 / M_PI;
+			rotate = atan2(g->y2, g->x2);
 		} else {
-			errx(EXIT_FAILURE, "edge %d invalid?\n", edge);
+			errx(EXIT_FAILURE, "edge %d invalid?\n", i);
 		}
 
-		printf("<!-- edge %d --><g transform=\"translate(%f,%f) rotate(%f)\">\n",
-			edge,
-			trans_x,
-			trans_y,
-			rotate
+		// position this one translated and rotated
+		poly_t * const g2 = calloc(1, sizeof(*g2));
+		g2->face = f2;
+		g2->start_edge = f->next_edge[edge];
+		g->next[edge] = g2;
+		g2->next[g2->start_edge] = g;
+
+		poly_position(
+			g2,
+			g->rot + rotate, 
+			g->p[0][0] + trans_x,
+			g->p[0][1] + trans_y
 		);
 
-		recurse(f2, f->next_edge[(edge+start_edge) % 3]);
+		// \todo: CHECK FOR OVERLAP!
 
-		printf("</g>\n");
+		poly_build(g2);
 	}
     }
 
-	// no success
 	return 0;
 }
 
-v3_t v3_sub(v3_t a, v3_t b)
+void
+poly_print(
+	poly_t * const g
+)
 {
-	v3_t c = { .p = {
-		a.p[0] - b.p[0],
-		a.p[1] - b.p[1],
-		a.p[2] - b.p[2],
-	} };
-	return c;
-}
+	face_t * const f = g->face;
+	const int start_edge = g->start_edge;
 
-float v3_dot(v3_t a, v3_t b)
-{
-	return a.p[0]*b.p[0] + a.p[1]*b.p[1] + a.p[2]*b.p[2];
-}
+	g->printed = 1;
 
-v3_t v3_cross(v3_t u, v3_t v)
-{
-	float u1 = u.p[0];
-	float u2 = u.p[1];
-	float u3 = u.p[2];
+	// draw this triangle;
+	// if the edge is an outside, which means that the group
+	// has no next element, draw a cut line.  If there is an
+	// adjacent neighbor and it is not coplanar, draw a score line
+printf("<g>\n");
+	for (int i = 0 ; i < 3 ; i++)
+	{
+		poly_t * const next = g->next[i];
 
-	float v1 = v.p[0];
-	float v2 = v.p[1];
-	float v3 = v.p[2];
+		if (!next)
+		{
+			// draw a cut line
+			svg_line("#FF0000", g->p[i], g->p[(i+1) % 3]);
+			continue;
+		}
 
-	v3_t c = { .p = {
-		u2*v3 - u3*v2,
-		u3*v1 - u1*v3,
-		u1*v2 - u2*v1,
-	}};
+		//if (next->printed)
+			//continue;
 
-	return c;
+		if (!f->coplanar[(0+start_edge) % 3])
+		{
+			// draw a score line since they are not coplanar
+			svg_line("#00FF00", g->p[i], g->p[(i+1) % 3]);
+		}
+	}
+printf("</g>\n");
+
+	for (int i = 0 ; i < 3 ; i++)
+	{
+		poly_t * const next = g->next[i];
+		if (!next || next->printed)
+			continue;
+
+		poly_print(next);
+	}
 }
 
 
@@ -315,23 +311,17 @@ coplanar_check(
 }
 
 
-
-int main(void)
+/** Translate a list of STL triangles into a connected graph of faces.
+ *
+ * If there are any triangles that do not have three connected edges,
+ * the first error will be reported and NULL will be returned.
+ */
+face_t *
+stl2faces(
+	const stl_face_t * const stl_faces,
+	const int num_triangles
+)
 {
-	const size_t max_len = 1 << 20;
-	uint8_t * const buf = calloc(max_len, 1);
-
-	ssize_t rc = read(0, buf, max_len);
-	if (rc == -1)
-		return EXIT_FAILURE;
-
-	const stl_header_t * const hdr = (const void*) buf;
-	const stl_face_t * const stl_faces = (const void*)(hdr+1);
-	const int num_triangles = hdr->num_triangles;
-
-	fprintf(stderr, "header: '%s'\n", hdr->header);
-	fprintf(stderr, "num: %d\n", num_triangles);
-
 	face_t * const faces = calloc(num_triangles, sizeof(*faces));
 
 	// convert the stl triangles into faces
@@ -387,15 +377,53 @@ int main(void)
 		// all three edges should be matched
 		if (f->next[0] && f->next[1] && f->next[2])
 			continue;
-		errx(EXIT_FAILURE, "%d missing edges?\n", i);
+		fprintf(stderr, "%d missing edges?\n", i);
+		free(faces);
+		return NULL;
 	}
 
-	// we now have a graph that shows the connection between
-	// all of the faces and their sizes. start converting them
+	return faces;
+}
 
+
+int main(void)
+{
+	const size_t max_len = 1 << 20;
+	uint8_t * const buf = calloc(max_len, 1);
+
+	ssize_t rc = read(0, buf, max_len);
+	if (rc == -1)
+		return EXIT_FAILURE;
+
+	const stl_header_t * const hdr = (const void*) buf;
+	const stl_face_t * const stl_faces = (const void*)(hdr+1);
+	const int num_triangles = hdr->num_triangles;
+
+	fprintf(stderr, "header: '%s'\n", hdr->header);
+	fprintf(stderr, "num: %d\n", num_triangles);
+
+	face_t * const faces = stl2faces(stl_faces, num_triangles);
+
+	// we now have a graph that shows the connection between
+	// all of the faces and their sizes. start trying to build
+	// non-overlapping groups of them
+	
 	printf("<svg xmlns=\"http://www.w3.org/2000/svg\">\n");
-	//for (int i = 0 ; i < num_triangles ; i++)
-		recurse(&faces[0], 0);
+	for (int i = 0 ; i < num_triangles ; i++)
+	{
+		face_t * const f = &faces[i];
+		if (f->used)
+			continue;
+		poly_t g;
+		g.face = f;
+		poly_position(&g, 0, 0, 0);
+
+		poly_build(&g);
+
+		printf("<g>\n");
+		poly_print(&g);
+		printf("</g>\n");
+	}
 
 	printf("</svg>\n");
 
