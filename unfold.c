@@ -62,6 +62,8 @@ struct poly
 
 	face_t * face;
 	poly_t * next[3];
+
+	poly_t * work_next;
 };
 
 
@@ -159,6 +161,18 @@ fprintf(stderr, "%p %d %f %f %f %f => %f %f %f\n", f, start_edge, g->rot*180/M_P
 }
 
 
+static void
+enqueue(
+	poly_t * g,
+	poly_t * const new_g
+)
+{
+	while (g->work_next)
+		g = g->work_next;
+	g->work_next = new_g;
+}
+
+
 /** recursively try to fix up the triangles.
  *
  * returns the maximum number of triangles added
@@ -215,8 +229,6 @@ poly_build(
 		poly_t * const g2 = calloc(1, sizeof(*g2));
 		g2->face = f2;
 		g2->start_edge = f->next_edge[edge];
-		g->next[i] = g2;
-		g2->next[0] = g;
 
 		poly_position(
 			g2,
@@ -228,7 +240,11 @@ poly_build(
 
 		// \todo: CHECK FOR OVERLAP!
 
-		poly_build(g2);
+		g->next[i] = g2;
+		g2->next[0] = g;
+		f2->used = 1;
+
+		enqueue(g, g2);
 	}
     }
 
@@ -445,7 +461,12 @@ int main(void)
 		};
 		poly_position(&g, &origin, 0, 0, 0);
 
-		poly_build(&g);
+		poly_t * iter = &g;
+		while (iter)
+		{
+			poly_build(iter);
+			iter = iter->work_next;
+		}
 
 		printf("<g>\n");
 		poly_print(&g);
