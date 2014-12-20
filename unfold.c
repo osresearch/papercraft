@@ -112,13 +112,14 @@ svg_line(
 void
 rotate(
 	float * p,
+	const float * origin,
 	float a,
 	float x,
 	float y
 )
 {
-	p[0] = cos(a) * x - sin(a) * y;
-	p[1] = sin(a) * x + cos(a) * y;
+	p[0] = cos(a) * x - sin(a) * y + origin[0];
+	p[1] = sin(a) * x + cos(a) * y + origin[1];
 }
 
 
@@ -126,9 +127,10 @@ rotate(
 void
 poly_position(
 	poly_t * const g,
+	const poly_t * const g_src,
+	float rot,
 	float trans_x,
-	float trans_y,
-	float rot
+	float trans_y
 )
 {
 	face_t * const f = g->face;
@@ -140,14 +142,20 @@ poly_position(
 	float x2 = (a*a + b*b - c*c) / (2*a);
 	float y2 = sqrt(b*b - x2*x2);
 
-	g->rot = rot;
+	// translate by trans_x/trans_y in the original ref frame
+	// to get the origin point
+	float origin[2];
+	rotate(origin, g_src->p[0], g_src->rot, trans_x, trans_y);
+
+	g->rot = g_src->rot + rot;
 	g->a = a;
 	g->x2 = x2;
 	g->y2 = y2;
 
-	rotate(g->p[0], rot, trans_x +  0, trans_y +  0);
-	rotate(g->p[1], rot, trans_x +  a, trans_y +  0);
-	rotate(g->p[2], rot, trans_x + x2, trans_y + y2);
+fprintf(stderr, "%p %d %f %f %f %f => %f %f %f\n", f, start_edge, g->rot*180/M_PI, a, b, c, x2, y2, rot);
+	rotate(g->p[0], origin, g->rot, 0, 0);
+	rotate(g->p[1], origin, g->rot, a, 0);
+	rotate(g->p[2], origin, g->rot, x2, y2);
 }
 
 
@@ -186,7 +194,7 @@ poly_build(
 		{
 			trans_x = g->a;
 			trans_y = 0;
-			rotate = 180;
+			rotate = M_PI;
 		} else
 		if (i == 1)
 		{
@@ -207,14 +215,15 @@ poly_build(
 		poly_t * const g2 = calloc(1, sizeof(*g2));
 		g2->face = f2;
 		g2->start_edge = f->next_edge[edge];
-		g->next[edge] = g2;
-		g2->next[g2->start_edge] = g;
+		g->next[i] = g2;
+		g2->next[0] = g;
 
 		poly_position(
 			g2,
-			g->rot + rotate, 
-			g->p[0][0] + trans_x,
-			g->p[0][1] + trans_y
+			g,
+			rotate, 
+			trans_x,
+			trans_y
 		);
 
 		// \todo: CHECK FOR OVERLAP!
@@ -240,9 +249,19 @@ poly_print(
 	// if the edge is an outside, which means that the group
 	// has no next element, draw a cut line.  If there is an
 	// adjacent neighbor and it is not coplanar, draw a score line
-printf("<g>\n");
+printf("<g><!-- %p %d %f %f->%p %f->%p %f->%p -->\n",
+	f,
+	g->start_edge, g->rot * 180/M_PI,
+	f->sides[0],
+	f->next[0],
+	f->sides[1],
+	f->next[1],
+	f->sides[2],
+	f->next[2]
+);
 	for (int i = 0 ; i < 3 ; i++)
 	{
+		const int edge = (start_edge + i) % 3;
 		poly_t * const next = g->next[i];
 
 		if (!next)
@@ -252,13 +271,16 @@ printf("<g>\n");
 			continue;
 		}
 
-		//if (next->printed)
-			//continue;
+		if (next->printed)
+			continue;
 
-		if (!f->coplanar[(0+start_edge) % 3])
+		if (f->coplanar[edge])
 		{
+			// draw a shadow line since they are coplanar
+			svg_line("#F0F0F0", g->p[i], g->p[(i+1) % 3]);
+		} else {
 			// draw a score line since they are not coplanar
-			svg_line("#00FF00", g->p[i], g->p[(i+1) % 3]);
+			svg_line("#0000FF", g->p[i], g->p[(i+1) % 3]);
 		}
 	}
 printf("</g>\n");
@@ -333,6 +355,7 @@ stl2faces(
 		f->sides[0] = v3_len(&stl->p[0], &stl->p[1]);
 		f->sides[1] = v3_len(&stl->p[1], &stl->p[2]);
 		f->sides[2] = v3_len(&stl->p[2], &stl->p[0]);
+fprintf(stderr, "%p %f %f %f\n", f, f->sides[0], f->sides[1], f->sides[2]);
 	}
 
 	// look to see if there is a matching point
@@ -409,14 +432,18 @@ int main(void)
 	// non-overlapping groups of them
 	
 	printf("<svg xmlns=\"http://www.w3.org/2000/svg\">\n");
+	poly_t origin = { };
+
 	for (int i = 0 ; i < num_triangles ; i++)
 	{
 		face_t * const f = &faces[i];
 		if (f->used)
 			continue;
-		poly_t g;
-		g.face = f;
-		poly_position(&g, 0, 0, 0);
+		poly_t g = {
+			.face	= f,
+			.start_edge	= 0,
+		};
+		poly_position(&g, &origin, 0, 0, 0);
 
 		poly_build(&g);
 
