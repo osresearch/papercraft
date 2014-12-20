@@ -101,7 +101,7 @@ svg_line(
 	float * p2
 )
 {
-	printf("<line x1=\"%f\" y1=\"%f\" x2=\"%f\" y2=\"%f\" stroke=\"%s\"/>\n",
+	printf("<line x1=\"%f\" y1=\"%f\" x2=\"%f\" y2=\"%f\" stroke=\"%s\" stroke-width=\"0.1px\"/>\n",
 		p1[0],
 		p1[1],
 		p2[0],
@@ -173,6 +173,162 @@ enqueue(
 }
 
 
+static poly_t * poly_root;
+
+static inline int
+v2_eq(
+	const float p0[],
+	const float p1[]
+)
+{
+	const float dx = p0[0] - p1[0];
+	const float dy = p0[1] - p1[1];
+
+	// are the points within epsilon of each other?
+	if (-EPS < dx && dx < EPS
+	&&  -EPS < dy && dy < EPS)
+		return 1;
+
+	// nope, not equal
+	return 0;
+}
+
+
+
+// Returns 1 if the lines intersect, otherwise 0. In addition, if the lines 
+// intersect the intersection point may be stored in the floats i_x and i_y.
+int
+get_line_intersection(
+	float p0_x,
+	float p0_y,
+	float p1_x,
+	float p1_y, 
+	float p2_x,
+	float p2_y,
+	float p3_x,
+	float p3_y,
+	float *i_x,
+	float *i_y
+)
+{
+	float s1_x = p1_x - p0_x;
+	float s1_y = p1_y - p0_y;
+	float s2_x = p3_x - p2_x;
+	float s2_y = p3_y - p2_y;
+
+	float s = (-s1_y * (p0_x - p2_x) + s1_x * (p0_y - p2_y))
+		/ (-s2_x * s1_y + s1_x * s2_y);
+
+	float t = ( s2_x * (p0_y - p2_y) - s2_y * (p0_x - p2_x))
+		/ (-s2_x * s1_y + s1_x * s2_y);
+
+	if (s > EPS && s < 1-EPS && t > EPS && t < 1-EPS)
+	{
+		fprintf(stderr, "collision: %f,%f->%f,%f %f,%f->%f,%f == %f,%f\n",
+			p0_x, p0_y,
+			p1_x, p1_y,
+			p2_x, p2_y,
+			p3_x, p3_y,
+			s,
+			t
+		);
+
+		// Collision detected
+		if (i_x != NULL)
+			*i_x = p0_x + (t * s1_x);
+		if (i_y != NULL)
+			*i_y = p0_y + (t * s1_y);
+		return 1;
+	}
+
+	return 0; // No collision
+}
+
+
+int
+intersect(
+	const float p00[],
+	const float p01[],
+	const float p10[],
+	const float p11[]
+)
+{
+	// special case; if this is the same line, it does not intersect
+	if (v2_eq(p00, p10) && v2_eq(p01, p11))
+		return 0;
+	if (v2_eq(p01, p10) && v2_eq(p00, p11))
+		return 0;
+
+	return get_line_intersection(
+		p00[0],
+		p00[1],
+		p01[0],
+		p01[1],
+		p10[0],
+		p10[1],
+		p11[0],
+		p11[1],
+		NULL,
+		NULL
+	);
+}
+
+
+/** Check to see if two triangles overlap */
+int
+overlap_poly(
+	const poly_t * const g1,
+	const poly_t * const g2
+)
+{
+	if (intersect(g1->p[0], g1->p[1], g2->p[0], g2->p[1]))
+		return 1;
+	if (intersect(g1->p[0], g1->p[1], g2->p[1], g2->p[2]))
+		return 1;
+	if (intersect(g1->p[0], g1->p[1], g2->p[2], g2->p[0]))
+		return 1;
+
+	if (intersect(g1->p[1], g1->p[2], g2->p[0], g2->p[1]))
+		return 1;
+	if (intersect(g1->p[1], g1->p[2], g2->p[1], g2->p[2]))
+		return 1;
+	if (intersect(g1->p[1], g1->p[2], g2->p[2], g2->p[0]))
+		return 1;
+
+	if (intersect(g1->p[2], g1->p[0], g2->p[0], g2->p[1]))
+		return 1;
+	if (intersect(g1->p[2], g1->p[0], g2->p[1], g2->p[2]))
+		return 1;
+	if (intersect(g1->p[2], g1->p[0], g2->p[2], g2->p[0]))
+		return 1;
+
+	return 0;
+}
+
+
+/** Check to see if any triangles overlap */
+int
+overlap_check(
+	const poly_t * g,
+	const poly_t * const new_g
+)
+{
+	// special case -- if the root is the same as the one that we
+	// are checking, then it does not overlap
+	if (g == new_g)
+		return 0;
+
+	while (g)
+	{
+		if (overlap_poly(g, new_g))
+			return 1;
+		g = g->work_next;
+	}
+
+	return 0;
+}
+
+
 /** recursively try to fix up the triangles.
  *
  * returns the maximum number of triangles added
@@ -238,8 +394,13 @@ poly_build(
 			trans_y
 		);
 
-		// \todo: CHECK FOR OVERLAP!
+		if (overlap_check(poly_root, g2))
+		{
+			free(g2);
+			continue;
+		}
 
+		// no overlap, add it to the current group
 		g->next[i] = g2;
 		g2->next[0] = g;
 		f2->used = 1;
@@ -293,10 +454,10 @@ printf("<g><!-- %p %d %f %f->%p %f->%p %f->%p -->\n",
 		if (f->coplanar[edge])
 		{
 			// draw a shadow line since they are coplanar
-			svg_line("#F0F0F0", g->p[i], g->p[(i+1) % 3]);
+			//svg_line("#F0F0F0", g->p[i], g->p[(i+1) % 3]);
 		} else {
 			// draw a score line since they are not coplanar
-			svg_line("#0000FF", g->p[i], g->p[(i+1) % 3]);
+			svg_line("#00FF00", g->p[i], g->p[(i+1) % 3]);
 		}
 	}
 printf("</g>\n");
@@ -460,6 +621,10 @@ int main(void)
 			.start_edge	= 0,
 		};
 		poly_position(&g, &origin, 0, 0, 0);
+
+		// set the root of the new group
+		poly_root = &g;
+		fprintf(stderr, "\n\n\n****** New group %p\n", poly_root);
 
 		poly_t * iter = &g;
 		while (iter)
