@@ -488,6 +488,9 @@ printf("</g>\n");
 }
 
 
+/* Returns the angle between two triangles that share one edge.
+ * This allows for a coplanarity check.
+ */
 int
 coplanar_check(
 	const stl_face_t * const f1,
@@ -520,7 +523,7 @@ coplanar_check(
 	float dot = v3_dot(dx31, cross);
 	
 	int check = -EPS < dot && dot < +EPS;
-	//fprintf( stderr, "%p %p %s\n", f1, f2, check ? "yes" : "no");
+	fprintf( stderr, "%p %p %s: %f\n", f1, f2, check ? "yes" : "no", dot);
 	return check;
 }
 
