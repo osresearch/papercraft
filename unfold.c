@@ -174,6 +174,7 @@ enqueue(
 
 
 static poly_t * poly_root;
+static float poly_min[2], poly_max[2];
 
 static inline int
 v2_eq(
@@ -341,6 +342,20 @@ poly_build(
 	face_t * const f = g->face;
 	const int start_edge = g->start_edge;
 	f->used = 1;
+
+	// update the group's bounding box
+	for (int i = 0 ; i < 3 ; i++)
+	{
+		const float px = g->p[i][0];
+		const float py = g->p[i][1];
+
+		if (px < poly_min[0]) poly_min[0] = px;
+		if (px > poly_max[0]) poly_max[0] = px;
+
+		if (py < poly_min[1]) poly_min[1] = py;
+		if (py > poly_max[1]) poly_max[1] = py;
+	}
+		
 
 	fprintf(stderr, "%p: adding to poly\n", f);
 
@@ -611,6 +626,9 @@ int main(void)
 	printf("<svg xmlns=\"http://www.w3.org/2000/svg\">\n");
 	poly_t origin = { };
 
+	float last_x = 0;
+	float last_y = 0;
+
 	for (int i = 0 ; i < num_triangles ; i++)
 	{
 		face_t * const f = &faces[i];
@@ -624,6 +642,9 @@ int main(void)
 
 		// set the root of the new group
 		poly_root = &g;
+		poly_min[0] = poly_min[1] = 0;
+		poly_max[0] = poly_max[1] = 0;
+
 		fprintf(stderr, "\n\n\n****** New group %p\n", poly_root);
 
 		poly_t * iter = &g;
@@ -633,7 +654,13 @@ int main(void)
 			iter = iter->work_next;
 		}
 
-		printf("<g>\n");
+		// offset the poly so that it doesn't overlap the ones
+		// we've already generated. only shift in Y.
+		float off_x = last_x - poly_min[0];
+		float off_y = last_y - poly_min[1];
+		last_y = off_y + poly_max[1];
+
+		printf("<g transform=\"translate(%f %f)\">\n", off_x, off_y);
 		poly_print(&g);
 		printf("</g>\n");
 	}
