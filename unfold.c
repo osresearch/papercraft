@@ -164,9 +164,18 @@ fprintf(stderr, "%p %d %f %f %f %f => %f %f %f\n", f, start_edge, g->rot*180/M_P
 static void
 enqueue(
 	poly_t * g,
-	poly_t * const new_g
+	poly_t * const new_g,
+	int at_head
 )
 {
+	if (at_head)
+	{
+		new_g->work_next = g->work_next;
+		g->work_next = new_g;
+		return;
+	}
+
+	// go to the end of the line
 	while (g->work_next)
 		g = g->work_next;
 	g->work_next = new_g;
@@ -369,7 +378,7 @@ poly_build(
 		assert(f2 != NULL);
 		if (f2->used)
 			continue;
-		if (pass == 0 && !f->coplanar[edge])
+		if (pass == 0 && f->coplanar[edge] == 0)
 			continue;
 
 		// create a group that translates and rotates
@@ -420,7 +429,12 @@ poly_build(
 		g2->next[0] = g;
 		f2->used = 1;
 
-		enqueue(g, g2);
+		// if g2 is a coplanar triangle, process it now rather than
+		// defering the work.
+		if (f->coplanar[edge] == 0)
+			enqueue(g, g2, 1);
+		else
+			enqueue(g, g2, 0);
 	}
     }
 
@@ -466,13 +480,18 @@ printf("<g><!-- %p %d %f %f->%p %f->%p %f->%p -->\n",
 		if (next->printed)
 			continue;
 
-		if (f->coplanar[edge])
+		if (f->coplanar[edge] < 0)
 		{
+			// draw a mountain score line since they are not coplanar
+			svg_line("#00FF00", g->p[i], g->p[(i+1) % 3]);
+		} else
+		if (f->coplanar[edge] > 0)
+		{
+			// draw a mountain score line since they are not coplanar
+			svg_line("#0000FF", g->p[i], g->p[(i+1) % 3]);
+		} else {
 			// draw a shadow line since they are coplanar
 			//svg_line("#F0F0F0", g->p[i], g->p[(i+1) % 3]);
-		} else {
-			// draw a score line since they are not coplanar
-			svg_line("#00FF00", g->p[i], g->p[(i+1) % 3]);
 		}
 	}
 printf("</g>\n");
@@ -488,8 +507,8 @@ printf("</g>\n");
 }
 
 
-/* Returns the angle between two triangles that share one edge.
- * This allows for a coplanarity check.
+/* Returns the 0 for coplanar, negative for mountain, positive for valley.
+ * (approximates the angle between two triangles that share one edge).
  */
 int
 coplanar_check(
@@ -524,7 +543,7 @@ coplanar_check(
 	
 	int check = -EPS < dot && dot < +EPS;
 	fprintf( stderr, "%p %p %s: %f\n", f1, f2, check ? "yes" : "no", dot);
-	return check;
+	return (int) dot;
 }
 
 
@@ -632,9 +651,12 @@ int main(void)
 	float last_x = 0;
 	float last_y = 0;
 
+	srand48(getpid());
+
+	const int offset = lrand48();
 	for (int i = 0 ; i < num_triangles ; i++)
 	{
-		face_t * const f = &faces[i];
+		face_t * const f = &faces[(i+offset) % num_triangles];
 		if (f->used)
 			continue;
 		poly_t g = {
