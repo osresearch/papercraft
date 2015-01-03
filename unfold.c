@@ -154,7 +154,7 @@ poly_position(
 	g->x2 = x2;
 	g->y2 = y2;
 
-fprintf(stderr, "%p %d %f %f %f %f => %f %f %f\n", f, start_edge, g->rot*180/M_PI, a, b, c, x2, y2, rot);
+//fprintf(stderr, "%p %d %f %f %f %f => %f %f %f\n", f, start_edge, g->rot*180/M_PI, a, b, c, x2, y2, rot);
 	rotate(g->p[0], origin, g->rot, 0, 0);
 	rotate(g->p[1], origin, g->rot, a, 0);
 	rotate(g->p[2], origin, g->rot, x2, y2);
@@ -366,7 +366,7 @@ poly_build(
 	}
 		
 
-	fprintf(stderr, "%p: adding to poly\n", f);
+	//fprintf(stderr, "%p: adding to poly\n", f);
 
    for(int pass = 0 ; pass < 2 ; pass++)
    {
@@ -542,7 +542,7 @@ coplanar_check(
 	float dot = v3_dot(dx31, cross);
 	
 	int check = -EPS < dot && dot < +EPS;
-	fprintf( stderr, "%p %p %s: %f\n", f1, f2, check ? "yes" : "no", dot);
+	//fprintf( stderr, "%p %p %s: %f\n", f1, f2, check ? "yes" : "no", dot);
 	return (int) dot;
 }
 
@@ -569,7 +569,7 @@ stl2faces(
 		f->sides[0] = v3_len(&stl->p[0], &stl->p[1]);
 		f->sides[1] = v3_len(&stl->p[1], &stl->p[2]);
 		f->sides[2] = v3_len(&stl->p[2], &stl->p[0]);
-fprintf(stderr, "%p %f %f %f\n", f, f->sides[0], f->sides[1], f->sides[2]);
+//fprintf(stderr, "%p %f %f %f\n", f, f->sides[0], f->sides[1], f->sides[2]);
 	}
 
 	// look to see if there is a matching point
@@ -653,7 +653,15 @@ int main(void)
 
 	srand48(getpid());
 
-	const int offset = lrand48();
+	int offset;
+
+	const char * const poly_offset = getenv("POLY");
+	if (poly_offset)
+		offset = atoi(poly_offset);
+	else
+		offset = lrand48();
+	fprintf(stderr, "Starting at poly %d\n", offset % num_triangles);
+
 	for (int i = 0 ; i < num_triangles ; i++)
 	{
 		face_t * const f = &faces[(i+offset) % num_triangles];
