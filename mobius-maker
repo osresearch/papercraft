@@ -3,7 +3,7 @@
 use warnings;
 use strict;
 
-my $sections = 6;
+my $sections = 12;
 my $thickness = 14;
 my $radius = [40,0,0];
 my $pi = 2*atan2(1,0);
