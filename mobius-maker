@@ -1,5 +1,9 @@
 #!/usr/bin/perl
 # Generate the mobius segments for a twisting bracelet
+# (0,0)
+# (1,0)
+# (0.5,sqrt(3)/2)
+# center is (0.5, sqrt(3)/3)
 use warnings;
 use strict;
 
@@ -8,10 +12,12 @@ my $thickness = 14;
 my $radius = [40,0,0];
 my $pi = 2*atan2(1,0);
 
+my $h = sqrt(3)/2;
+
 my $pts = [
-	v3scale($thickness, [-0.5, -sqrt(3)/4 + sqrt(3)/12, 0]),
-	v3scale($thickness, [ 0.0, +sqrt(3)/4 + sqrt(3)/12, 0]),
-	v3scale($thickness, [+0.5, -sqrt(3)/4 + sqrt(3)/12, 0]),
+	v3scale($thickness, [-0.5, -$h/3, 0]),
+	v3scale($thickness, [ 0.0, +$h*2/3, 0]),
+	v3scale($thickness, [+0.5, -$h/3, 0]),
 ];
 
 
