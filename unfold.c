@@ -135,7 +135,7 @@ poly_position(
 	float trans_y
 )
 {
-	face_t * const f = g->face;
+	const face_t * const f = g->face;
 	const int start_edge = g->start_edge;
 
 	float a = f->sides[(start_edge + 0) % 3];
@@ -446,7 +446,7 @@ poly_print(
 	poly_t * const g
 )
 {
-	face_t * const f = g->face;
+	const face_t * const f = g->face;
 	const int start_edge = g->start_edge;
 
 	g->printed = 1;
