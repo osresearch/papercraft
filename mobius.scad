@@ -15,7 +15,7 @@ radius=50;
 
 module segment(n)
 {
-	translate([radius-thick/2,0,0])
+	translate([radius-thick,0,0])
 	rotate([90,0,0])
 	rotate([0,0,n*120/sides])
 	linear_extrude(
@@ -27,10 +27,22 @@ module segment(n)
 	triangle(thick);
 }
 
-for(i=[1:sides])
+module slice()
 {
-	rotate([0,0,i*360/sides]) segment(i);
+	rotate([0,0,-360/sides/2]) translate([50,-5,0]) cube([100,10,20], center=true);
+	rotate([0,0,+360/sides/2]) translate([50,+5,0]) cube([100,10,20], center=true);
 }
 
-%cylinder(r=radius,height=5);
+//for(i=[1:sides])
+for(i=[1:sides])
+{
+	rotate([0,0,i*360/sides]) render() difference() 
+	{
+		segment(i);
+		slice();
+	}
+}
+
+
+//%cylinder(r=radius,height=5);
 
