@@ -17,6 +17,7 @@
 #endif
 
 static int debug = 0;
+static int draw_labels = 0;
 
 typedef struct
 {
@@ -520,7 +521,10 @@ printf("<g><!-- %p %d %f %f->%p %f->%p %f->%p -->\n",
 
 	const float tx = (g->p[0][0] + g->p[1][0] + g->p[2][0]) / 3.0;
 	const float ty = (g->p[0][1] + g->p[1][1] + g->p[2][1]) / 3.0;
-	svg_text(tx, ty, 0, "%04x", (0x7FFFF & (uintptr_t) f) >> 3);
+
+	if (draw_labels)
+	svg_text(tx, ty, 0, "%04x",
+		(0x7FFFF & (uintptr_t) f) >> 3);
 
 	for (int i = 0 ; i < 3 ; i++)
 	{
@@ -539,7 +543,11 @@ printf("<g><!-- %p %d %f %f->%p %f->%p %f->%p -->\n",
 			const float angle = atan2(dy, dx) * 180 / M_PI;
 
 			svg_line("#FF0000", p1, p2, 0);
-			svg_text(cx, cy, angle, "%04x", (0x7FFFF & (uintptr_t) f->next[edge]) >> 3);
+
+			if (draw_labels)
+			svg_text(cx, cy, angle, "%04x",
+				(0x7FFFF & (uintptr_t) f->next[edge]) >> 3);
+
 			continue;
 		}
 
