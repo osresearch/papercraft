@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <stdarg.h>
 #include <unistd.h>
 #include <math.h>
 #include <err.h>
@@ -465,6 +466,33 @@ poly_build(
 	return 0;
 }
 
+
+void
+svg_text(
+	float x,
+	float y,
+	float angle,
+	const char * fmt,
+	...
+)
+{
+
+	printf("<g transform=\"translate(%f %f) rotate(%f)\">",
+		x,
+		y,
+		angle
+	);
+
+	printf("<text x=\"-2\" y=\"1.5\" style=\"font-size:1.5px;\">");
+
+	va_list ap;
+	va_start(ap, fmt);
+	vprintf(fmt, ap);
+	va_end(ap);
+
+	printf("</text></g>\n");
+}
+
 void
 poly_print(
 	poly_t * const g
@@ -489,6 +517,11 @@ printf("<g><!-- %p %d %f %f->%p %f->%p %f->%p -->\n",
 	f->sides[2],
 	f->next[2]
 );
+
+	const float tx = (g->p[0][0] + g->p[1][0] + g->p[2][0]) / 3.0;
+	const float ty = (g->p[0][1] + g->p[1][1] + g->p[2][1]) / 3.0;
+	svg_text(tx, ty, 0, "%04x", (0x7FFFF & (uintptr_t) f) >> 3);
+
 	for (int i = 0 ; i < 3 ; i++)
 	{
 		const int edge = (start_edge + i) % 3;
@@ -497,7 +530,16 @@ printf("<g><!-- %p %d %f %f->%p %f->%p %f->%p -->\n",
 		if (!next)
 		{
 			// draw a cut line
-			svg_line("#FF0000", g->p[i], g->p[(i+1) % 3], 0);
+			const float * const p1 = g->p[i];
+			const float * const p2 = g->p[(i+1) % 3];
+			const float cx = (p2[0] + p1[0]) / 2;
+			const float cy = (p2[1] + p1[1]) / 2;
+			const float dx = (p2[0] - p1[0]);
+			const float dy = (p2[1] - p1[1]);
+			const float angle = atan2(dy, dx) * 180 / M_PI;
+
+			svg_line("#FF0000", p1, p2, 0);
+			svg_text(cx, cy, angle, "%04x", (0x7FFFF & (uintptr_t) f->next[edge]) >> 3);
 			continue;
 		}
 
