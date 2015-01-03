@@ -1,0 +1,176 @@
+#!/usr/bin/perl
+# Generate the mobius segments for a twisting bracelet
+use warnings;
+use strict;
+
+my $sections = 16;
+my $thickness = 10;
+my $radius = [40,0,0];
+my $pi = 3.141519;
+
+my $pts = [
+	v3scale($thickness, [-0.5, -sqrt(3)/4 + sqrt(3)/12, 0]),
+	v3scale($thickness, [ 0.0, +sqrt(3)/4 + sqrt(3)/12, 0]),
+	v3scale($thickness, [+0.5, -sqrt(3)/4 + sqrt(3)/12, 0]),
+];
+
+
+sub rotate2
+{
+	my $x = shift;
+	my $y = shift;
+	my $angle_deg = shift;
+	my $angle = $angle_deg * $pi / 180;
+	my $s = sin($angle);
+	my $c = cos($angle);
+
+	return (
+		$x*$c - $y*$s,
+		$x*$s + $y*$c,
+	);
+}
+
+
+sub rotate
+{
+	my $p = shift;
+	my $angle_deg = shift;
+	my $axis = shift;
+
+	my ($x,$y,$z) = @$p;
+
+	if ($axis == 2)
+	{
+		($x,$y) = rotate2($x, $y, $angle_deg);
+	} elsif ($axis == 1)
+	{
+		($x,$z) = rotate2($x, $z, $angle_deg);
+	} elsif ($axis == 0)
+	{
+		($y,$z) = rotate2($y, $z, $angle_deg);
+	}
+
+	return [$x,$y,$z];
+}
+
+sub v3scale
+{
+	my $s = shift;
+	my $p1 = shift;
+	return [
+		$p1->[0]*$s,
+		$p1->[1]*$s,
+		$p1->[2]*$s,
+	];
+}
+
+sub v3add
+{
+	my $p1 = shift;
+	my $p2 = shift;
+	return [
+		$p1->[0] + $p2->[0],
+		$p1->[1] + $p2->[1],
+		$p1->[2] + $p2->[2],
+	];
+}
+
+
+sub v3sub
+{
+	my ($v0, $v1) = @_;
+
+	return [
+		$v0->[0] - $v1->[0],
+		$v0->[1] - $v1->[1],
+		$v0->[2] - $v1->[2],
+	];
+}
+
+sub v3cross
+{
+	my ($u,$v) = @_;
+
+	return [
+		$u->[1]*$v->[2] - $u->[2]*$v->[1],
+		$u->[2]*$v->[0] - $u->[0]*$v->[2],
+		$u->[0]*$v->[1] - $u->[1]*$v->[0],
+	];
+}
+
+
+sub triangle
+{
+	my ($p0, $p1, $p2) = @_;
+	my $v1 = v3sub($p1, $p0);
+	my $v2 = v3sub($p2, $p0);
+	my $n = v3cross($v1, $v2);
+
+	my $rc = sprintf <<"", $n->[0], $n->[1], $n->[2];
+		facet normal %f %f %f
+		outer loop
+
+	$rc .= sprintf <<"", $p0->[0], $p0->[1], $p0->[2];
+			vertex %f %f %f
+
+	$rc .= sprintf <<"", $p1->[0], $p1->[1], $p1->[2];
+			vertex %f %f %f
+
+	$rc .= sprintf <<"", $p2->[0], $p2->[1], $p2->[2];
+			vertex %f %f %f
+
+	$rc .= <<"";
+		endloop
+		endfacet
+
+	return $rc;
+}
+
+sub module
+{
+	my $n = shift;
+
+	# Generate the six points for the triangles
+	my $p00 = rotate($pts->[0], $n*120.0/$sections, 2);
+	my $p01 = rotate($pts->[1], $n*120.0/$sections, 2);
+	my $p02 = rotate($pts->[2], $n*120.0/$sections, 2);
+
+	my $p10 = rotate($pts->[0], ($n+1)*120.0/$sections, 2);
+	my $p11 = rotate($pts->[1], ($n+1)*120.0/$sections, 2);
+	my $p12 = rotate($pts->[2], ($n+1)*120.0/$sections, 2);
+
+	# Now offset them by the radius, after flipping
+	$p00 = v3add($radius, rotate($p00, 90, 0));
+	$p01 = v3add($radius, rotate($p01, 90, 0));
+	$p02 = v3add($radius, rotate($p02, 90, 0));
+
+	$p10 = v3add($radius, rotate($p10, 90, 0));
+	$p11 = v3add($radius, rotate($p11, 90, 0));
+	$p12 = v3add($radius, rotate($p12, 90, 0));
+
+	# rotate them to line up with the radials
+	$p00 = rotate($p00, $n*360.0/$sections, 2);
+	$p01 = rotate($p01, $n*360.0/$sections, 2);
+	$p02 = rotate($p02, $n*360.0/$sections, 2);
+	$p10 = rotate($p10, ($n+1)*360.0/$sections, 2);
+	$p11 = rotate($p11, ($n+1)*360.0/$sections, 2);
+	$p12 = rotate($p12, ($n+1)*360.0/$sections, 2);
+
+	# And now generate the triangles
+	return ''
+		. triangle($p00, $p01, $p10)
+		. triangle($p01, $p02, $p11)
+		. triangle($p02, $p00, $p12)
+		. triangle($p10, $p11, $p01)
+		. triangle($p11, $p12, $p02)
+		. triangle($p12, $p10, $p00)
+		;
+}
+
+print "solid OpenSCAD_Model\n";
+
+print module($_) for 1..$sections;
+#print module(0);
+#print module(2);
+
+print "endsolid OpenSCAD_Model\n";
