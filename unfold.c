@@ -97,17 +97,39 @@ edge_eq2(
 void
 svg_line(
 	const char * color,
-	float * p1,
-	float * p2
+	const float * p1,
+	const float * p2,
+	int dash
 )
 {
-	printf("<line x1=\"%f\" y1=\"%f\" x2=\"%f\" y2=\"%f\" stroke=\"%s\" stroke-width=\"0.1px\"/>\n",
-		p1[0],
-		p1[1],
-		p2[0],
-		p2[1],
-		color
-	);
+	if (!dash)
+	{
+		printf("<line x1=\"%f\" y1=\"%f\" x2=\"%f\" y2=\"%f\" stroke=\"%s\" stroke-width=\"0.1px\"/>\n",
+			p1[0],
+			p1[1],
+			p2[0],
+			p2[1],
+			color
+		);
+		return;
+	}
+
+	// dashed line, split in the middle
+	const float dx = p2[0] - p1[0];
+	const float dy = p2[1] - p1[1];
+
+	const float h1[] = {
+		p1[0] + dx*0.45,
+		p1[1] + dy*0.45,
+	};
+	const float h2[] = {
+		p1[0] + dx*0.55,
+		p1[1] + dy*0.55,
+	};
+
+
+	svg_line(color, p1, h1, 0);
+	svg_line(color, h2, p2, 0);
 }
 
 
@@ -473,7 +495,7 @@ printf("<g><!-- %p %d %f %f->%p %f->%p %f->%p -->\n",
 		if (!next)
 		{
 			// draw a cut line
-			svg_line("#FF0000", g->p[i], g->p[(i+1) % 3]);
+			svg_line("#FF0000", g->p[i], g->p[(i+1) % 3], 0);
 			continue;
 		}
 
@@ -483,12 +505,12 @@ printf("<g><!-- %p %d %f %f->%p %f->%p %f->%p -->\n",
 		if (f->coplanar[edge] < 0)
 		{
 			// draw a mountain score line since they are not coplanar
-			svg_line("#00FF00", g->p[i], g->p[(i+1) % 3]);
+			svg_line("#00FF00", g->p[i], g->p[(i+1) % 3], 1);
 		} else
 		if (f->coplanar[edge] > 0)
 		{
-			// draw a mountain score line since they are not coplanar
-			svg_line("#0000FF", g->p[i], g->p[(i+1) % 3]);
+			// draw a valley score line since they are not coplanar
+			svg_line("#00FF00", g->p[i], g->p[(i+1) % 3], 0);
 		} else {
 			// draw a shadow line since they are coplanar
 			//svg_line("#F0F0F0", g->p[i], g->p[(i+1) % 3]);
