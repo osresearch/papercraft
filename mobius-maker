@@ -3,10 +3,10 @@
 use warnings;
 use strict;
 
-my $sections = 16;
-my $thickness = 10;
+my $sections = 6;
+my $thickness = 14;
 my $radius = [40,0,0];
-my $pi = 3.141519;
+my $pi = 2*atan2(1,0);
 
 my $pts = [
 	v3scale($thickness, [-0.5, -sqrt(3)/4 + sqrt(3)/12, 0]),
@@ -91,11 +91,19 @@ sub v3cross
 {
 	my ($u,$v) = @_;
 
-	return [
+	my $c = [
 		$u->[1]*$v->[2] - $u->[2]*$v->[1],
 		$u->[2]*$v->[0] - $u->[0]*$v->[2],
 		$u->[0]*$v->[1] - $u->[1]*$v->[0],
 	];
+
+	my $mag = 0
+		+ $c->[0]*$c->[0]
+		+ $c->[1]*$c->[1]
+		+ $c->[2]*$c->[2]
+		;
+
+	return v3scale(1.0/sqrt($mag), $c);
 }
 
 
@@ -104,20 +112,20 @@ sub triangle
 	my ($p0, $p1, $p2) = @_;
 	my $v1 = v3sub($p1, $p0);
 	my $v2 = v3sub($p2, $p0);
-	my $n = v3cross($v1, $v2);
+	my $n = v3cross($v2, $v1);
 
 	my $rc = sprintf <<"", $n->[0], $n->[1], $n->[2];
-		facet normal %f %f %f
+		facet normal %.4f %.4f %.4f
 		outer loop
 
 	$rc .= sprintf <<"", $p0->[0], $p0->[1], $p0->[2];
-			vertex %f %f %f
+			vertex %.4f %.4f %.4f
 
 	$rc .= sprintf <<"", $p1->[0], $p1->[1], $p1->[2];
-			vertex %f %f %f
+			vertex %.4f %.4f %.4f
 
 	$rc .= sprintf <<"", $p2->[0], $p2->[1], $p2->[2];
-			vertex %f %f %f
+			vertex %.4f %.4f %.4f
 
 	$rc .= <<"";
 		endloop
@@ -158,12 +166,12 @@ sub module
 
 	# And now generate the triangles
 	return ''
-		. triangle($p00, $p01, $p10)
-		. triangle($p01, $p02, $p11)
-		. triangle($p02, $p00, $p12)
-		. triangle($p10, $p11, $p01)
-		. triangle($p11, $p12, $p02)
-		. triangle($p12, $p10, $p00)
+		. triangle($p00, $p01, $p11)
+		. triangle($p01, $p02, $p12)
+		. triangle($p02, $p00, $p10)
+		. triangle($p11, $p10, $p00)
+		. triangle($p12, $p11, $p01)
+		. triangle($p10, $p12, $p02)
 		;
 }
 
