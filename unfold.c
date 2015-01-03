@@ -15,6 +15,8 @@
 #define 	M_PI   3.1415926535897932384
 #endif
 
+static int debug = 0;
+
 typedef struct
 {
 	char header[80];
@@ -256,7 +258,7 @@ get_line_intersection(
 
 	if (s > EPS && s < 1-EPS && t > EPS && t < 1-EPS)
 	{
-		fprintf(stderr, "collision: %f,%f->%f,%f %f,%f->%f,%f == %f,%f\n",
+		if(debug) fprintf(stderr, "collision: %f,%f->%f,%f %f,%f->%f,%f == %f,%f\n",
 			p0_x, p0_y,
 			p1_x, p1_y,
 			p2_x, p2_y,
@@ -388,7 +390,7 @@ poly_build(
 	}
 		
 
-	//fprintf(stderr, "%p: adding to poly\n", f);
+	if (debug) fprintf(stderr, "%p: adding to poly\n", f);
 
    for(int pass = 0 ; pass < 2 ; pass++)
    {
@@ -564,7 +566,7 @@ coplanar_check(
 	float dot = v3_dot(dx31, cross);
 	
 	int check = -EPS < dot && dot < +EPS;
-	//fprintf( stderr, "%p %p %s: %f\n", f1, f2, check ? "yes" : "no", dot);
+	if (debug) fprintf( stderr, "%p %p %s: %f\n", f1, f2, check ? "yes" : "no", dot);
 	return (int) dot;
 }
 
@@ -591,7 +593,8 @@ stl2faces(
 		f->sides[0] = v3_len(&stl->p[0], &stl->p[1]);
 		f->sides[1] = v3_len(&stl->p[1], &stl->p[2]);
 		f->sides[2] = v3_len(&stl->p[2], &stl->p[0]);
-//fprintf(stderr, "%p %f %f %f\n", f, f->sides[0], f->sides[1], f->sides[2]);
+		if (debug) fprintf(stderr, "%p %f %f %f\n",
+			f, f->sides[0], f->sides[1], f->sides[2]);
 	}
 
 	// look to see if there is a matching point
@@ -683,6 +686,7 @@ int main(void)
 	else
 		offset = lrand48();
 	fprintf(stderr, "Starting at poly %d\n", offset % num_triangles);
+	int group_count = 0;
 
 	for (int i = 0 ; i < num_triangles ; i++)
 	{
@@ -700,20 +704,35 @@ int main(void)
 		poly_min[0] = poly_min[1] = 0;
 		poly_max[0] = poly_max[1] = 0;
 
-		fprintf(stderr, "\n\n\n****** New group %p\n", poly_root);
-
 		poly_t * iter = &g;
+		int poly_count = 0;
+		group_count++;
+
+		if (debug) fprintf(stderr, "****** %d: New group %p\n",
+			group_count, poly_root);
+
 		while (iter)
 		{
 			poly_build(iter);
 			iter = iter->work_next;
+			poly_count++;
 		}
+
+		fprintf(stderr, "group %d: %d triangles\n",
+			group_count, poly_count);
+
+		// todo: walk the generated polygon and attempt to add tabs
+		// to edges where they fit
+
 
 		// offset the poly so that it doesn't overlap the ones
 		// we've already generated. only shift in Y.
 		float off_x = last_x - poly_min[0];
 		float off_y = last_y - poly_min[1];
 		last_y = off_y + poly_max[1];
+
+		// \todo: generate lots of poly sets before we print
+		// to find a minimal set. perhaps vary the search rules?
 
 		printf("<g transform=\"translate(%f %f)\">\n", off_x, off_y);
 		poly_print(&g);
