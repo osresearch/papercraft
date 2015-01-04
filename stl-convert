@@ -1,0 +1,48 @@
+#!/usr/bin/perl
+# Convert an ASCII STL file to a binary one
+use warnings;
+use strict;
+use Data::Dumper;
+
+undef $/;
+
+local $_ = <>;
+
+my ($name) = /^solid (.*?)$/msg;
+
+sub v3pack
+{
+	my $rc = '';
+	for (@_)
+	{
+		my @f = split /\s+/;
+		$rc .= pack("f3", @f);
+	}
+
+	return $rc;
+}
+
+my @faces;
+
+for(/facet(.*?)endfacet$/msg)
+{
+	my ($normals) = /normal (.*?)$/msg;
+	my @v = /vertex (.*?)$/msg;
+
+	#print Dumper(\@v);
+	push @faces, v3pack($normals,@v) . chr(0) . chr(0);
+}
+
+my $triangle_count = @faces;
+warn "$name: $triangle_count triangles\n";
+
+if (length $name > 80)
+{
+	warn "truncating name\n";
+	$name = substr($name, 0, 80);
+} else {
+	$name .= ' ' x (80 - length $name);
+}
+
+print $name, pack("L", $triangle_count), @faces;
+__END__;
