@@ -1,10 +1,11 @@
 CFLAGS = \
+	-std=c99 \
 	-g \
 	-O3 \
 	-W \
 	-Wall \
 
-LDFLAGS = \
+LDLIBS = \
 	-lm \
 
 all: unfold
