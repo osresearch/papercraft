@@ -17,7 +17,7 @@
 #endif
 
 static int debug = 0;
-static int draw_labels = 0;
+static int draw_labels = 1;
 
 typedef struct
 {
@@ -64,6 +64,7 @@ struct poly
 	// absolute coordintes of the triangle vertices
 	float p[3][2];
 
+	// todo: make this const and add backtracking
 	face_t * face;
 	poly_t * next[3];
 
@@ -519,12 +520,8 @@ printf("<g><!-- %p %d %f %f->%p %f->%p %f->%p -->\n",
 	f->next[2]
 );
 
-	const float tx = (g->p[0][0] + g->p[1][0] + g->p[2][0]) / 3.0;
-	const float ty = (g->p[0][1] + g->p[1][1] + g->p[2][1]) / 3.0;
-
-	if (draw_labels)
-	svg_text(tx, ty, 0, "%04x",
-		(0x7FFFF & (uintptr_t) f) >> 3);
+	int cut_lines = 0;
+	const uintptr_t a1 = (0x7FFFF & (uintptr_t) f) >> 3;
 
 	for (int i = 0 ; i < 3 ; i++)
 	{
@@ -543,10 +540,16 @@ printf("<g><!-- %p %d %f %f->%p %f->%p %f->%p -->\n",
 			const float angle = atan2(dy, dx) * 180 / M_PI;
 
 			svg_line("#FF0000", p1, p2, 0);
+			cut_lines++;
 
+			// use the lower address as the label
 			if (draw_labels)
-			svg_text(cx, cy, angle, "%04x",
-				(0x7FFFF & (uintptr_t) f->next[edge]) >> 3);
+			{
+				uintptr_t a2 = (0x7FFFF & (uintptr_t) f->next[edge]) >> 3;
+				if (a2 > a1)
+					a2 = a1;
+				svg_text(cx, cy, angle, "%04x", a2);
+			}
 
 			continue;
 		}
@@ -568,6 +571,17 @@ printf("<g><!-- %p %d %f %f->%p %f->%p %f->%p -->\n",
 			//svg_line("#F0F0F0", g->p[i], g->p[(i+1) % 3]);
 		}
 	}
+
+/*
+	// only draw labels if requested and if there are any cut-edges
+	// on this polygon.
+	const float tx = (g->p[0][0] + g->p[1][0] + g->p[2][0]) / 3.0;
+	const float ty = (g->p[0][1] + g->p[1][1] + g->p[2][1]) / 3.0;
+	if (draw_labels && cut_lines > 0)
+	svg_text(tx, ty, 0, "%04x",
+		(0x7FFFF & (uintptr_t) f) >> 3);
+*/
+
 printf("</g>\n");
 
 	for (int i = 0 ; i < 3 ; i++)
