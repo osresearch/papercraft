@@ -17,7 +17,7 @@
 #endif
 
 static int debug = 0;
-static int draw_labels = 1;
+static int draw_labels = 0;
 
 typedef struct
 {
