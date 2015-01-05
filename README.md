@@ -7,7 +7,18 @@ will need to be re-arranged to fit on the laser cutter bed.
 
 More info: https://trmm.net/Unfolding_STL
 
-This is a work in progress -- it is not yet feature complete.
+This is a work in progress -- it is not yet feature complete. Current features:
+
+* Collision detection works to build a non-overlapping set of triangles.
+
+* Coplanar triangles will be merged if possible.
+
+* Mountain/valley folds are marked.  Dashed line means valley fold.
+
+* Starting face can be selected or randomly chosen; some produce better results than others.
+
+* `stl-convert` script can convert OpenSCAD ASCII STL files into binary STL files for `unfold` to process.
+
 Among the features that it could use:
 
 * A better heuristic for finding the maximum non-overlaping set of triangles
@@ -17,5 +28,3 @@ triangles)
 * Tabs for securing parts together.
 
 * Collapsing of very small or very thin triangles.
-
-* Marking mountain or valley folds.
