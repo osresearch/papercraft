@@ -8,9 +8,10 @@ CFLAGS = \
 LDLIBS = \
 	-lm \
 
-all: unfold
+all: unfold wireframe
 
 unfold: unfold.o
+wireframe: wireframe.o
 
 clean:
 	$(RM) *.o
