@@ -36,6 +36,18 @@ typedef struct
 stl_face_t;
 
 
+#define MAX_VERTEX 32
+
+typedef struct stl_vertex stl_vertex_t;
+
+struct stl_vertex
+{
+	v3_t p;
+	int num_edges;
+	stl_vertex_t * edges[MAX_VERTEX];
+};
+
+
 typedef struct face face_t;
 typedef struct poly poly_t;
 
@@ -229,6 +241,37 @@ sign(
 }
 
 
+stl_vertex_t *
+stl_vertex_find(
+	stl_vertex_t ** const vertices,
+	int * num_vertex_ptr,
+	const v3_t * const p
+)
+{
+	const int num_vertex = *num_vertex_ptr;
+
+	for (int x = 0 ; x < num_vertex ; x++)
+	{
+		stl_vertex_t * const v = vertices[x];
+
+		if (v3_eq(&v->p, p))
+			return v;
+	}
+
+	if (debug)
+	fprintf(stderr, "%d: %f,%f,%f\n",
+		num_vertex,
+		p->p[0],
+		p->p[1],
+		p->p[2]
+	);
+
+	stl_vertex_t * const v = vertices[(*num_vertex_ptr)++] = calloc(1, sizeof(*v));
+	v->p = *p;
+	return v;
+}
+
+
 int main(void)
 {
 	const size_t max_len = 1 << 20;
@@ -247,6 +290,66 @@ int main(void)
 	fprintf(stderr, "header: '%s'\n", hdr->header);
 	fprintf(stderr, "num: %d\n", num_triangles);
 
+	// generate the unique list of vertices and their
+	// correponding edges
+	stl_vertex_t ** const vertices = calloc(3*num_triangles, sizeof(*vertices));
+
+	int num_vertex = 0;
+
+	for(int i = 0 ; i < num_triangles ; i++)
+	{
+		stl_vertex_t * vp[3] = {};
+
+		for (int j = 0 ; j < 3 ; j++)
+		{
+			const v3_t * const p = &stl_faces[i].p[j];
+			vp[j] = stl_vertex_find(vertices, &num_vertex, p);
+		}
+
+		// all three vertices are mapped; generate the
+		// connections
+		for (int j = 0 ; j < 3 ; j++)
+		{
+			stl_vertex_t * const v = vp[j];
+			stl_vertex_find(v->edges, &v->num_edges, &vp[(j+1) % 3]->p);
+			stl_vertex_find(v->edges, &v->num_edges, &vp[(j+2) % 3]->p);
+		}
+	}
+
+	fprintf(stderr, "%d unique vertices\n", num_vertex);
+	for (int i = 0 ; i < num_vertex ; i++)
+	{
+		stl_vertex_t * const v = vertices[i];
+		printf("translate([%f,%f,%f]) {\n",
+			v->p.p[0],
+			v->p.p[1],
+			v->p.p[2]
+		);
+		
+		printf("sphere(r=4); // %p\n", v);
+
+		for (int j = 0 ; j < v->num_edges ; j++)
+		{
+			stl_vertex_t * const v2 = v->edges[j];
+			const v3_t d = v3_sub(v2->p, v->p);
+			const float len = v3_len(&v2->p, &v->p);
+
+			const float b = acos(d.p[2] / len) * 180/M_PI;
+			const float c = d.p[0] == 0 ? sign(d.p[1]) * 90 : atan2(d.p[1], d.p[0]) * 180/M_PI;
+//
+			printf("%%rotate([0,%f,%f]) cylinder(r=1, h=%f); // %p\n",
+				b,
+				c,
+				len/3,
+				v2
+			);
+		}
+
+		printf("}\n");
+	}
+
+#if 0
+
 	face_t * const faces = stl2faces(stl_faces, num_triangles);
 
 	for (int i = 0 ; i < num_triangles ; i++)
@@ -264,6 +367,8 @@ int main(void)
 			// if we have already transited this edge
 			if (f->used[j])
 				continue;
+
+			// flag that we have used this vertex on the adjacent
 
 			f->used[j] = 1;
 
@@ -306,6 +411,7 @@ int main(void)
 			}
 		}
 	}
+#endif
 
 
 	return 0;
