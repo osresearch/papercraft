@@ -36,7 +36,7 @@ typedef struct
 stl_face_t;
 
 
-#define MAX_VERTEX 32
+#define MAX_VERTEX 64
 
 typedef struct stl_vertex stl_vertex_t;
 
@@ -75,6 +75,13 @@ coplanar_check(
 	if (match[2] && match[0])
 		mask = 4;
 
+	if (debug)
+		fprintf(stderr, "%p %p: %d %d %d\n",
+			f1,
+			f2,
+			match[0], match[1], match[2]
+		);
+
 	// otherwise they do not share enough points
 	if (mask == 0)
 		return 0;
@@ -103,6 +110,15 @@ coplanar_check(
 	v3_t dx43 = v3_sub(x4, x3);
 	v3_t cross = v3_cross(dx21, dx43);
 	float dot = v3_dot(dx31, cross);
+
+	if (debug)
+	fprintf(stderr, "dot %f:\n %f,%f,%f\n %f,%f,%f\n %f,%f,%f\n %f,%f,%f\n",
+		dot,
+		x1.p[0], x1.p[1], x1.p[2],
+		x2.p[0], x2.p[1], x2.p[2],
+		x3.p[0], x3.p[1], x3.p[2],
+		x4.p[0], x4.p[1], x4.p[2]
+	);
 	
 	int check = -EPS < dot && dot < +EPS;
 
@@ -144,14 +160,18 @@ stl_edge_insert(
 {
 	for (int i = 0 ; i < v1->num_edges ; i++)
 	{
-		const v3_t * const p0 = &v1->p;
-
 		// if v2 already exists in the edges, discard it
 		if (v1->edges[i] == v2)
 			return;
 	}
 
 	// if we reach this point, we need to insert the edge
+	if (debug)
+	fprintf(stderr, "%p: edge %d -> %p\n",
+		v1,
+		v1->num_edges,
+		v2
+	);
 	v1->edges[v1->num_edges++] = v2;
 }
 
@@ -181,6 +201,13 @@ stl_vertex_find(
 		p->p[2]
 	);
 
+	if (num_vertex == 6)
+	fprintf(stderr, "%f %f %f\n",
+		p->p[0],
+		p->p[1],
+		p->p[2]
+	);
+
 	stl_vertex_t * const v = vertices[(*num_vertex_ptr)++] = calloc(1, sizeof(*v));
 	v->p = *p;
 	return v;
@@ -200,8 +227,8 @@ int main(void)
 	const stl_header_t * const hdr = (const void*) buf;
 	const stl_face_t * const stl_faces = (const void*)(hdr+1);
 	const int num_triangles = hdr->num_triangles;
-	const float thick = 1;
-	const int do_square = 0;
+	const float thick = 3;
+	const int do_square = 1;
 
 	fprintf(stderr, "header: '%s'\n", hdr->header);
 	fprintf(stderr, "num: %d\n", num_triangles);
@@ -214,6 +241,8 @@ int main(void)
 
 	for(int i = 0 ; i < num_triangles ; i++)
 	{
+		if (debug) fprintf(stderr, "---------- triangle %d (%d)\n", i, num_vertex);
+
 		stl_vertex_t * vp[3] = {};
 
 		for (int j = 0 ; j < 3 ; j++)
@@ -232,9 +261,15 @@ int main(void)
 			if (j == i)
 				continue;
 
+			if (debug)
+			fprintf(stderr, "%d: check %d -> %d\n", num_vertex, i, j);
+
 			coplanar_mask |= coplanar_check(
 				&stl_faces[i], &stl_faces[j]);
 		}
+
+		if (debug)
+			fprintf(stderr, "mask %d\n", coplanar_mask);
 
 		// all three vertices are mapped; generate the
 		// connections
@@ -245,12 +280,22 @@ int main(void)
 			// if the edge from j to j+1 is not coplanar,
 			// add it to the list
 			if ((coplanar_mask & (1 << j)) == 0)
+			{
+				if (debug)
+				fprintf(stderr, "%p: %d insert\n", v, j);
 				stl_edge_insert(v, vp[(j+1) % 3]);
+			}
 
+/*
 			// if the edge from j+2 to j is not coplanar
 			const uint8_t j2 = (j + 2) % 3;
 			if ((coplanar_mask & (1 << j2)) == 0)
+			{
+				if (debug)
+				fprintf(stderr, "%p: %d insert back\n", v, j2);
 				stl_edge_insert(v, vp[j2]);
+			}
+*/
 		}
 	}
 
@@ -264,7 +309,7 @@ int main(void)
 			v->p.p[2]
 		);
 		
-		printf("sphere(r=4); // %p\n", v);
+		printf("sphere(r=8); // %d %p\n", i, v);
 
 		for (int j = 0 ; j < v->num_edges ; j++)
 		{
@@ -275,12 +320,20 @@ int main(void)
 			const float b = acos(d.p[2] / len) * 180/M_PI;
 			const float c = d.p[0] == 0 ? sign(d.p[1]) * 90 : atan2(d.p[1], d.p[0]) * 180/M_PI;
 //
-			printf("%%rotate([0,%f,%f]) cylinder(r=1, h=%f); // %p\n",
-				b,
-				c,
-				len*.45,
-				v2
-			);
+			printf("%%rotate([0,%f,%f]) ", b, c);
+
+			if (do_square)
+				printf("translate([0,0,%f]) cube([%f,%f,%f], center=true);\n",
+					len/2,
+					thick,
+					thick,
+					len
+				);
+			else
+				printf(" cylinder(r=1, h=%f); // %p\n",
+					len*.45,
+					v2
+				);
 		}
 
 		printf("}\n");

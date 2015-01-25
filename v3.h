@@ -6,7 +6,7 @@
 
 #include <math.h>
 
-#define EPS 0.0001
+#define EPS 0.5
 
 
 typedef struct
