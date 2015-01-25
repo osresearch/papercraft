@@ -8,8 +8,8 @@ use warnings;
 use strict;
 
 my $sections = 12;
-my $thickness = 30;
-my $radius = [40,0,0];
+my $thickness = 50;
+my $radius = [70,0,0];
 my $pi = 2*atan2(1,0);
 
 my $h = sqrt(3)/2;
@@ -145,13 +145,13 @@ sub module
 	my $n = shift;
 
 	# Generate the six points for the triangles
-	my $p00 = rotate($pts->[0], $n*120.0/$sections, 2);
-	my $p01 = rotate($pts->[1], $n*120.0/$sections, 2);
-	my $p02 = rotate($pts->[2], $n*120.0/$sections, 2);
+	my $p00 = rotate($pts->[0], $n*240.0/$sections, 2);
+	my $p01 = rotate($pts->[1], $n*240.0/$sections, 2);
+	my $p02 = rotate($pts->[2], $n*240.0/$sections, 2);
 
-	my $p10 = rotate($pts->[0], ($n+1)*120.0/$sections, 2);
-	my $p11 = rotate($pts->[1], ($n+1)*120.0/$sections, 2);
-	my $p12 = rotate($pts->[2], ($n+1)*120.0/$sections, 2);
+	my $p10 = rotate($pts->[0], ($n+1)*240.0/$sections, 2);
+	my $p11 = rotate($pts->[1], ($n+1)*240.0/$sections, 2);
+	my $p12 = rotate($pts->[2], ($n+1)*240.0/$sections, 2);
 
 	# Now offset them by the radius, after flipping
 	$p00 = v3add($radius, rotate($p00, 90, 0));
