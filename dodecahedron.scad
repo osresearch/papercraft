@@ -18,4 +18,4 @@ module dodecahedron(height)
         }
 }
 
-dodecahedron(100);
+dodecahedron(150);

@@ -313,7 +313,7 @@ int main(void)
 		"  render() difference() {\n"
 		"    cylinder(r=thick/2+2, h=2*thick);\n"
 		//"    translate([0,0,len/2+2]) cube([thick,thick,2*thick]);\n"
-		"    translate([0,0,2]) cylinder(r=thick/2, h=2*thick);\n"
+		"    translate([0,0,thick/2+2]) cylinder(r=thick/2, h=2*thick);\n"
 		"  }\n"
 		//"  %%translate([0,0,len*0.48/2]) cube([thick,thick,len*0.48], center=true);\n"
 		"  %%translate([0,0,0]) cylinder(r=thick/2, h=len*0.48);\n"
