@@ -86,6 +86,7 @@ coplanar_check(
 	if (mask == 0)
 		return 0;
 
+#if 0
 	// find the four distinct points
 	v3_t x1 = f1->p[0];
 	v3_t x2 = f1->p[1];
@@ -129,6 +130,13 @@ coplanar_check(
 
 	// coplanar! return the shared edge mask
 	return mask;
+#else
+	// if the normals are close enough, then it is coplanner
+	if (v3_eq(&f1->normal, &f2->normal))
+		return mask;
+	else
+		return 0;
+#endif
 }
 
 
@@ -227,7 +235,7 @@ int main(void)
 	const stl_header_t * const hdr = (const void*) buf;
 	const stl_face_t * const stl_faces = (const void*)(hdr+1);
 	const int num_triangles = hdr->num_triangles;
-	const float thick = 3;
+	const float thick = 7.8;
 	const int do_square = 1;
 
 	fprintf(stderr, "header: '%s'\n", hdr->header);
@@ -300,6 +308,19 @@ int main(void)
 	}
 
 	fprintf(stderr, "%d unique vertices\n", num_vertex);
+	printf("thick=%f;\n"
+		"module connector(len) {\n"
+		"  render() difference() {\n"
+		"    cylinder(r=thick/2+2, h=2*thick);\n"
+		//"    translate([0,0,len/2+2]) cube([thick,thick,2*thick]);\n"
+		"    translate([0,0,2]) cylinder(r=thick/2, h=2*thick);\n"
+		"  }\n"
+		//"  %%translate([0,0,len*0.48/2]) cube([thick,thick,len*0.48], center=true);\n"
+		"  %%translate([0,0,0]) cylinder(r=thick/2, h=len*0.48);\n"
+		"}\n",
+		thick
+	);
+
 	for (int i = 0 ; i < num_vertex ; i++)
 	{
 		stl_vertex_t * const v = vertices[i];
@@ -309,7 +330,7 @@ int main(void)
 			v->p.p[2]
 		);
 		
-		printf("sphere(r=8); // %d %p\n", i, v);
+		printf("sphere(r=%f); // %d %p\n", thick/2+2, i, v);
 
 		for (int j = 0 ; j < v->num_edges ; j++)
 		{
@@ -320,15 +341,10 @@ int main(void)
 			const float b = acos(d.p[2] / len) * 180/M_PI;
 			const float c = d.p[0] == 0 ? sign(d.p[1]) * 90 : atan2(d.p[1], d.p[0]) * 180/M_PI;
 //
-			printf("%%rotate([0,%f,%f]) ", b, c);
+			printf("rotate([0,%f,%f]) ", b, c);
 
 			if (do_square)
-				printf("translate([0,0,%f]) cube([%f,%f,%f], center=true);\n",
-					len/2,
-					thick,
-					thick,
-					len
-				);
+				printf("connector(%f);\n", len);
 			else
 				printf(" cylinder(r=1, h=%f); // %p\n",
 					len*.45,
