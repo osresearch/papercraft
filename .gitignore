@@ -1,0 +1,6 @@
+*.stl
+*.svg
+*.o
+.*.sw*
+unfold
+wireframe
