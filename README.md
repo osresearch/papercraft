@@ -28,3 +28,16 @@ triangles)
 * Tabs for securing parts together.
 
 * Collapsing of very small or very thin triangles.
+
+![Wireframed dodecahedron](https://farm8.staticflickr.com/7320/16181756310_729bb6e186_z.jpg)
+
+`wireframe` reads a binary STL file on standard input and generates an
+OpenSCAD file that has each vertex replaced with a 3D printable
+connector to create a large-scale version of the object.
+
+More info: https://trmm.net/Wireframe
+
+This is very beta! It desperately needs some command line options and
+some smarts in labeling the connectors, especially if the structure
+is not regular.  Also, it does not detect intersections between
+beams or if the nodes are too close together.
