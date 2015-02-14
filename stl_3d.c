@@ -76,7 +76,7 @@ stl_3d_parse(
 	const size_t file_len = num_triangles * sizeof(*fts);
  	fts = calloc(1, file_len);
 
-	rc = read(fd, &fts, file_len);
+	rc = read(fd, fts, file_len);
 	if (rc < 0 || (size_t) rc != file_len)
 		return NULL;
 
