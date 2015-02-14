@@ -8,6 +8,10 @@
 
 #define EPS 0.0001
 
+#ifndef M_PI
+#define 	M_PI   3.1415926535897932384
+#endif
+
 
 typedef struct
 {
