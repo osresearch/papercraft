@@ -89,6 +89,8 @@ stl_3d_parse(
 		.face = calloc(num_triangles, sizeof(*stl->face)),
 	};
 
+	// build the unique set of vertices and their connection
+	// to each face.
 	for(int i = 0 ; i < num_triangles ; i++)
 	{
 		const stl_3d_file_triangle_t * const ft = &fts[i];
@@ -105,8 +107,29 @@ stl_3d_parse(
 			f->vertex[j] = v;
 
 			// and add this face to the vertex
-			v->face[v->num_face++] = f;
+			v->face[v->num_face] = f;
+			v->face_num[v->num_face] = j;
+			v->num_face++;
 		}
+	}
+
+	// build the connections between each face
+	for(int i = 0 ; i < num_triangles ; i++)
+	{
+		stl_face_t * const f1 = &stl->face[i];
+
+		for(int j = 0 ; j < num_triangles ; j++)
+		{
+			stl_face_t * const f2 = &stl->face[j];
+
+			if (i == j)
+				continue;
+
+			// find if these two triangles share an edge
+			if (!stl_shared_edge(f1, f2))
+				continue;
+		}
+		
 	}
 
 	return stl;

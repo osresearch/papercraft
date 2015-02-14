@@ -11,40 +11,13 @@
 #include <err.h>
 #include <assert.h>
 #include "v3.h"
+#include "stl_3d.h"
 
 static int debug = 0;
 static int draw_labels = 0;
 
-typedef struct
-{
-	char header[80];
-	uint32_t num_triangles;
-} __attribute__((__packed__))
-stl_header_t;
 
-
-typedef struct
-{
-	v3_t normal;
-	v3_t p[3];
-	uint16_t attr;
-} __attribute__((__packed__))
-stl_face_t;
-
-
-#define MAX_VERTEX 64
-
-typedef struct stl_vertex stl_vertex_t;
-
-struct stl_vertex
-{
-	v3_t p;
-	int num_edges;
-	stl_vertex_t * edges[MAX_VERTEX];
-};
-
-
-
+#if 0
 /* Returns 1 for ever edge in f1 that is shared with f2.
  */
 int
@@ -210,35 +183,40 @@ stl_vertex_find(
 	v->p = *p;
 	return v;
 }
+#endif
 
 
 
 int main(void)
 {
-	const size_t max_len = 1 << 20;
-	uint8_t * const buf = calloc(max_len, 1);
-
-	ssize_t rc = read(0, buf, max_len);
-	if (rc == -1)
+	stl_3d_t * const stl = stl_3d_parse(STDIN_FILENO);
+	if (!stl)
 		return EXIT_FAILURE;
 
-	const stl_header_t * const hdr = (const void*) buf;
-	const stl_face_t * const stl_faces = (const void*)(hdr+1);
-	const int num_triangles = hdr->num_triangles;
-	const float thick = 7.8;
-	const int do_square = 1;
-
-	fprintf(stderr, "header: '%s'\n", hdr->header);
-	fprintf(stderr, "num: %d\n", num_triangles);
-
-	// generate the unique list of vertices and their
-	// correponding edges
-	stl_vertex_t ** const vertices = calloc(3*num_triangles, sizeof(*vertices));
-
-	int num_vertex = 0;
-
-	for(int i = 0 ; i < num_triangles ; i++)
+	// for each vertex, find the coplanar triangles
+	// \todo: do coplanar bits
+	for(int i = 0 ; i < stl->num_vertex ; i++)
 	{
+		const stl_vertex_t * const v = &stl->vertex[i];
+
+		fprintf(stderr, "%d: %f,%f,%f\n",
+			i, v->p.p[0], v->p.p[1], v->p.p[2]);
+
+		int face_used[v->num_faces] = {};
+
+		for (int j = 0 ; j < v->num_face; j++)
+		{
+			const stl_face_t * const f = &v->face[j];
+			face_used[j] = 1;
+
+			for (int k = 0 ; k < v->num_faces ; k++)
+			{
+				if (face_used[k])
+					continue;
+				if (coplanar
+		}
+	}
+#if 0
 		if (debug) fprintf(stderr, "---------- triangle %d (%d)\n", i, num_vertex);
 
 		stl_vertex_t * vp[3] = {};
@@ -333,6 +311,7 @@ int main(void)
 
 		printf("}\n");
 	}
+#endif
 
 	return 0;
 }

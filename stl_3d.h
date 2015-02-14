@@ -17,6 +17,7 @@ struct stl_vertex {
 	v3_t p;
 	int num_face;
 	stl_face_t *face[STL_MAX_FACES];
+	int face_num[STL_MAX_FACES]; // which vertex on the face
 };
 
 struct stl_face
