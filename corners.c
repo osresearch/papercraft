@@ -47,21 +47,46 @@ main(void)
 			const stl_face_t * const f = v->face[j];
 			if (face_used[f - stl->face])
 				continue;
+			const int start_vertex = v->face_num[j];
 			const int vertex_count = stl_trace_face(
 				stl,
 				f,
 				vertex_list,
-				face_used
+				face_used,
+				start_vertex
 			);
 
 			refframe_t ref;
 			refframe_init(&ref,
-				f->vertex[(v->face_num[j]+0) % 3]->p,
-				f->vertex[(v->face_num[j]+1) % 3]->p,
-				f->vertex[(v->face_num[j]+2) % 3]->p
+				f->vertex[(start_vertex+0) % 3]->p,
+				f->vertex[(start_vertex+1) % 3]->p,
+				f->vertex[(start_vertex+2) % 3]->p
 			);
 
-			printf("linear_extrude(height=%f) polygon(points=[\n",
+			const stl_vertex_t * const v1 = vertex_list[0];
+			const stl_vertex_t * const v2 = vertex_list[1];
+			const v3_t d = v3_sub(v2->p, v1->p);
+			const float len = v3_len(&v2->p, &v1->p);
+
+			//const float b = acos(d.p[2] / len) * 180/M_PI;
+			//const float c = d.p[0] == 0 ? sign(d.p[1]) * 90 : atan2(d.p[1], d.p[0]) * 180/M_PI;
+//
+			// use the transpose of the rotation matrix,
+			// which will rotate from (x,y) to the correct
+			// orientation relative to this connector node.
+
+			printf("multmatrix(m=[[%f,%f,%f,0],[%f,%f,%f,0],[%f,%f,%f,0],[0,0,0,1]]) translate([0,0,%f]) linear_extrude(height=%f) polygon(points=[\n",
+				ref.x.p[0],
+				ref.y.p[0],
+				ref.z.p[0],
+				ref.x.p[1],
+				ref.y.p[1],
+				ref.z.p[1],
+				ref.x.p[2],
+				ref.y.p[2],
+				ref.z.p[2],
+				//a, b, c,
+				-thickness/2,
 				thickness
 			);
 
@@ -140,7 +165,7 @@ main(void)
 		free(face_used);
 
 		printf("}\n");
-		if (i == 1) break; // only do one right now
+		//if (i == 2) break; // only do one right now
 	}
 
 	return 0;
