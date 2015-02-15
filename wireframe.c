@@ -140,19 +140,6 @@ coplanar_check(
 }
 
 
-static inline float
-sign(
-	const float x
-)
-{
-	if (x < 0)
-		return -1;
-	if (x > 0)
-		return +1;
-	return 0;
-}
-
-
 
 /**
  * Add a vector to the list of edges if it is not already present

@@ -12,6 +12,19 @@
 #define 	M_PI   3.1415926535897932384
 #endif
 
+static inline float
+sign(
+	const float x
+)
+{
+	if (x < 0)
+		return -1;
+	if (x > 0)
+		return +1;
+	return 0;
+}
+
+
 
 typedef struct
 {
