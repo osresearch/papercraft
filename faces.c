@@ -14,7 +14,7 @@
 #include "stl_3d.h"
 
 static const char * stroke_string
-	= "stroke=\"#FF0000\" stroke-width=\"1px\" fill=\"none\"";
+	= "stroke-width=\"1px\" fill=\"none\"";
 
 typedef struct
 {
@@ -58,10 +58,30 @@ svg_line(
 
 	v3_project(ref, p1, &x1, &y1);
 	v3_project(ref, p2, &x2, &y2);
+	const char * color = "#FF0000";
 
-	printf("<line x1=\"%f\" y1=\"%f\" x2=\"%f\" y2=\"%f\" %s/>\n",
+	printf("<line x1=\"%f\" y1=\"%f\" x2=\"%f\" y2=\"%f\" stroke=\"%s\" %s/>\n",
 		x1, y1,
 		x2, y2,
+		color,
+		stroke_string
+	);
+}
+
+
+static void
+svg_circle(
+	const double x,
+	const double y,
+	const double rad,
+	const char * const color
+)
+{
+	printf("<circle cx=\"%f\" cy=\"%f\" r=\"%f\" stroke=\"%s\" %s/>\n",
+		x,
+		y,
+		rad,
+		color,
 		stroke_string
 	);
 }
@@ -81,9 +101,6 @@ trace_face(
 	const stl_face_t * f = f_start;
 	int i = 0;
 	int vertex_count = 0;
-
-	// preload the list with the starting point
-	vertex_list[vertex_count++] = f->vertex[i];
 
 	do {
 		const stl_vertex_t * const v1 = f->vertex[(i+0) % 3];
@@ -127,6 +144,140 @@ trace_face(
 	return vertex_count;
 }
 
+//  Determines the intersection point of the line defined by points A and B with the
+//  line defined by points C and D.
+//
+//  Returns YES if the intersection point was found, and stores that point in X,Y.
+//  Returns NO if there is no determinable intersection point, in which case X,Y will
+//  be unmodified.
+
+static int
+line_intersect(
+	double Ax, double Ay,
+	double Bx, double By,
+	double Cx, double Cy,
+	double Dx, double Dy,
+	double *X, double *Y
+)
+{
+	//  Fail if either line is undefined.
+	if ((Ax==Bx && Ay==By) || (Cx==Dx && Cy==Dy))
+		return 0;
+
+	//  (1) Translate the system so that point A is on the origin.
+	Bx-=Ax; By-=Ay;
+	Cx-=Ax; Cy-=Ay;
+	Dx-=Ax; Dy-=Ay;
+
+	//  Discover the length of segment A-B.
+	const double distAB=sqrt(Bx*Bx+By*By);
+
+	//  (2) Rotate the system so that point B is on the positive X axis.
+	const double theCos=Bx/distAB;
+  	const double theSin=By/distAB;
+
+  	double newX=Cx*theCos+Cy*theSin;
+  	Cy  =Cy*theCos-Cx*theSin; Cx=newX;
+  	newX=Dx*theCos+Dy*theSin;
+  	Dy  =Dy*theCos-Dx*theSin; Dx=newX;
+
+	//  Fail if the lines are parallel.
+	if (Cy==Dy) return 0;
+
+	//  (3) Discover the position of the intersection point along line A-B.
+	const double ABpos=Dx+(Cx-Dx)*Dy/(Dy-Cy);
+
+	//  (4) Apply the discovered position to line A-B in the original coordinate system.
+	*X=Ax+ABpos*theCos;
+	*Y=Ay+ABpos*theSin;
+
+	return 1;
+}
+
+
+
+/** Compute the inset coordinate.
+ * http://alienryderflex.com/polygon_inset/
+//  Given the sequentially connected points (a,b), (c,d), and (e,f), this
+//  function returns, in (C,D), a bevel-inset replacement for point (c,d).
+//
+//  Note:  If vectors (a,b)->(c,d) and (c,d)->(e,f) are exactly 180° opposed,
+//         or if either segment is zero-length, this function will do
+//         nothing; i.e. point (C,D) will not be set.
+
+ */
+void
+inset(
+	const refframe_t * const ref,
+	const double inset_dist,
+	double * const x_out,
+	double * const y_out,
+	const v3_t p0, // previous point
+	const v3_t p1, // current point to inset
+	const v3_t p2  // next point
+)
+{
+	double a, b, c, d, e, f;
+	v3_project(ref, p0, &a, &b);
+	v3_project(ref, p1, &c, &d);
+	v3_project(ref, p2, &e, &f);
+
+	double c1 = c;
+	double d1 = d;
+	double c2 = c;
+	double d2 = d;
+
+	//  Calculate length of line segments.
+	const double dx1 = c-a;
+	const double dy1 = d-b;
+	const double dist1 = sqrt(dx1*dx1+dy1*dy1);
+	const double dx2 = e-c;
+	const double dy2 = f-d;
+	const double dist2 = sqrt(dx2*dx2+dy2*dy2);
+
+	//  Exit if either segment is zero-length.
+	if (dist1==0. || dist2==0.)
+	{
+		*x_out = *y_out = 0;
+		fprintf(stderr, "inset fail\n");
+		return;
+	}
+
+	//  Inset each of the two line segments.
+	double insetX, insetY;
+
+	insetX =  dy1/dist1 * inset_dist;
+	a+=insetX;
+	c1+=insetX;
+
+	insetY = -dx1/dist1 * inset_dist;
+	b+=insetY;
+	d1+=insetY;
+
+	insetX = dy2/dist2 * inset_dist;
+	e+=insetX;
+	c2+=insetX;
+
+	insetY = -dx2/dist2 * inset_dist;
+	f+=insetY;
+	d2+=insetY;
+
+	//  If inset segments connect perfectly, return the connection point.
+	if (c1==c2 && d1==d2)
+	{
+		*x_out = c1;
+		*y_out = d1;
+		return;
+	}
+
+	//  Return the intersection point of the two inset segments (if any).
+	if (line_intersect(a,b,c1,d1,c2,d2,e,f, x_out, y_out))
+		return;
+
+	*x_out = *y_out = 0;
+	fprintf(stderr, "inset failed 2\n");
+}
+
 
 int
 main(void)
@@ -134,8 +285,8 @@ main(void)
 	stl_3d_t * const stl = stl_3d_parse(STDIN_FILENO);
 	if (!stl)
 		return EXIT_FAILURE;
-	const double inset = 8;
-	const double hole = 3;
+	const double inset_distance = 8;
+	const double hole_radius = 3;
 
 	int * const face_used = calloc(sizeof(*face_used), stl->num_face);
 
@@ -170,8 +321,26 @@ main(void)
 
 		printf("<!-- face %d --><g>\n", i);
 
-		for (int j = 0 ; j < vertex_count-1 ; j++)
-			svg_line(&ref, vertex_list[j]->p, vertex_list[j+1]->p);
+		// generate the polygon outline (should be one path?)
+		for (int j = 0 ; j < vertex_count ; j++)
+			svg_line(
+				&ref,
+				vertex_list[(j+0) % vertex_count]->p,
+				vertex_list[(j+1) % vertex_count]->p
+			);
+
+		// generate the inset mounting holes
+		for (int j = 0 ; j < vertex_count ; j++)
+		{
+			double x, y;
+			inset(&ref, inset_distance, &x, &y,
+				vertex_list[(j+0) % vertex_count]->p,
+				vertex_list[(j+1) % vertex_count]->p,
+				vertex_list[(j+2) % vertex_count]->p
+			);
+			svg_circle(x, y, hole_radius, "#00ff00");
+		}
+
 		printf("</g>\n");
 	}
 
