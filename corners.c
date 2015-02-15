@@ -20,7 +20,7 @@ main(void)
 	stl_3d_t * const stl = stl_3d_parse(STDIN_FILENO);
 	if (!stl)
 		return EXIT_FAILURE;
-	const double thickness = 8;
+	const double thickness = 6;
 
 	// for each vertex, find the coplanar triangles
 	// \todo: do coplanar bits
@@ -30,8 +30,10 @@ main(void)
 		const v3_t origin = v->p;
 
 		printf("// vertex %d\n"
-			"translate([%f,%f,%f]) {\n"
-			"sphere(r=20);\n",
+			"//translate([%f,%f,%f])\n"
+			"//render() difference()\n"
+			"{\n"
+			"//sphere(r=20);\n",
 			i, origin.p[0], origin.p[1], origin.p[2]);
 		
 
@@ -52,24 +54,25 @@ main(void)
 			if (v->face_num[j] == 2)
 				n = v3_cross(v0, v1);
 
-			n = v3_scale(n, thickness/v3_mag(n)/2);
+			n = v3_scale(n, (thickness+1)/v3_mag(n)/2);
+			v3_t n2 = v3_scale(n, 1/v3_mag(n));
 
-			v0 = v3_add(v0, n);
-			v1 = v3_add(v1, n);
-			v2 = v3_add(v2, n);
-			v3_t v3 = v3_sub(v0, n);
-			v3_t v4 = v3_sub(v1, n);
-			v3_t v5 = v3_sub(v2, n);
+			v3_t v3 = v3_add(v0, n);
+			v3_t v4 = v3_add(v1, n);
+			v3_t v5 = v3_add(v2, n);
+			v0 = v3_sub(v0, n);
+			v1 = v3_sub(v1, n);
+			v2 = v3_sub(v2, n);
 
 			printf("polyhedron(\n"
 				"points=[\n"
 				"[%f,%f,%f],[%f,%f,%f],[%f,%f,%f],\n"
 				"[%f,%f,%f],[%f,%f,%f],[%f,%f,%f],\n"
 				"], faces = ["
-				"  [0,2,1], [3,4,5],"
-				"  [0,3,2], [2,3,5],"
-				"  [0,4,3], [0,1,4],"
-				"  [1,5,4], [1,2,5],"
+				"  [0,1,2], [3,5,4],"
+				"  [0,2,3], [2,5,3],"
+				"  [0,3,4], [0,4,1],"
+				"  [1,4,5], [1,5,2],"
 				"]);\n",
 				v0.p[0], v0.p[1], v0.p[2],
 				v1.p[0], v1.p[1], v1.p[2],
@@ -79,19 +82,11 @@ main(void)
 				v5.p[0], v5.p[1], v5.p[2]
 			);
 				
-/*
-			fprintf(stderr, "\t%d: %d:%f,%d:%f,%d:%f\n",
-				f - stl->face,
-				f->face[0] ? f->face[0] - stl->face : -1, f->angle[0],
-				f->face[1] ? f->face[1] - stl->face : -1, f->angle[1],
-				f->face[2] ? f->face[2] - stl->face : -1, f->angle[2]
-			);
-*/
-			break; // only do one right now
+			//break; // only do one right now
 		}
 
 		printf("}\n");
-		break; // only do one right now
+		if (i == 0) break; // only do one right now
 	}
 
 	return 0;
