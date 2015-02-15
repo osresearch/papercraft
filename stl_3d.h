@@ -82,6 +82,17 @@ refframe_init(
 );
 
 
+void
+refframe_inset(
+	const refframe_t * const ref,
+	const double inset_dist,
+	double * const x_out,
+	double * const y_out,
+	const v3_t p0, // previous point
+	const v3_t p1, // current point to inset
+	const v3_t p2  // next point
+);
+
 /** Project a 3D point onto a 2D space */
 void
 v3_project(
