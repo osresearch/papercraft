@@ -51,6 +51,33 @@ v3_len(
 	return sqrt(dx*dx + dy*dy + dz*dz);
 }
 
+static inline double
+v3_mag(
+	const v3_t v0
+)
+{
+	float dx = v0.p[0];
+	float dy = v0.p[1];
+	float dz = v0.p[2];
+
+	return sqrt(dx*dx + dy*dy + dz*dz);
+}
+
+
+static inline v3_t
+v3_add(
+	v3_t a,
+	v3_t b
+)
+{
+	v3_t c = { .p = {
+		a.p[0] + b.p[0],
+		a.p[1] + b.p[1],
+		a.p[2] + b.p[2],
+	} };
+	return c;
+}
+
 
 static inline v3_t
 v3_sub(
@@ -66,6 +93,19 @@ v3_sub(
 	return c;
 }
 
+static inline v3_t
+v3_scale(
+	v3_t a,
+	float s
+)
+{
+	v3_t c = { .p = {
+		a.p[0]*s,
+		a.p[1]*s,
+		a.p[2]*s,
+	} };
+	return c;
+}
 
 static inline float
 v3_dot(
