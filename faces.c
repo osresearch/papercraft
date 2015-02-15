@@ -67,28 +67,64 @@ svg_line(
 }
 
 
-void
-draw_face(
+/** Starting at a point, trace the coplanar polygon and return a
+ * list of vertices.
+ */
+int
+trace_face(
 	const stl_3d_t * const stl,
-	const stl_face_t * const f,
-	int * const face_used,
-	const refframe_t * const ref
+	const stl_face_t * const f_start,
+	const stl_vertex_t ** vertex_list,
+	int * const face_used
 )
 {
-	if (face_used[f - stl->face]++)
-		return;
+	const stl_face_t * f = f_start;
+	int i = 0;
+	int vertex_count = 0;
 
-	for (int i = 0 ; i < 3 ; i++)
-	{
-		if (!f->face[i] || f->angle[i] != 0)
+	// preload the list with the starting point
+	vertex_list[vertex_count++] = f->vertex[i];
+
+	do {
+		const stl_vertex_t * const v1 = f->vertex[(i+0) % 3];
+		const stl_vertex_t * const v2 = f->vertex[(i+1) % 3];
+		const stl_face_t * const f_next = f->face[i];
+
+		fprintf(stderr, "%p %d: %f,%f,%f\n", f, i, v1->p.p[0], v1->p.p[1], v1->p.p[2]);
+		face_used[f - stl->face] = 1;
+
+		if (!f_next || f->angle[i] != 0)
 		{
-			// not coplanar (or missing?)
-			svg_line(ref, f->vertex[i]->p, f->vertex[(i+1)%3]->p);
-		} else {
-			// coplanar, recurse
-			draw_face(stl, f->face[i], face_used, ref);
+			// not coplanar or no connection.
+			// add the NEXT vertex on this face and continue
+			vertex_list[vertex_count++] = v2;
+			i = (i+1) % 3;
+			continue;
 		}
-	}
+
+		// coplanar; figure out which vertex on the next
+		// face we start at
+		int i_next = -1;
+		for (int j = 0 ; j < 3 ; j++)
+		{
+			if (f_next->vertex[j] != v1)
+				continue;
+			i_next = j;
+			break;
+		}
+
+		if (i_next == -1)
+			abort();
+		
+		// move to the new face
+		f = f_next;
+		i = i_next;
+
+		// keep going until we reach our starting face
+		// at vertex 0.
+	} while (f != f_start || i != 0);
+
+	return vertex_count;
 }
 
 
@@ -108,6 +144,7 @@ main(void)
 	printf("<svg xmlns=\"http://www.w3.org/2000/svg\">\n");
 	printf("<g transform=\"scale(3.543307)\"><!-- scale to mm -->\n");
 
+	const stl_vertex_t ** const vertex_list = calloc(sizeof(*vertex_list), stl->num_vertex);
 
 	for(int i = 0 ; i < stl->num_face ; i++)
 	{
@@ -115,6 +152,9 @@ main(void)
 			continue;
 
 		const stl_face_t * const f = &stl->face[i];
+		const int vertex_count = trace_face(stl, f, vertex_list, face_used);
+
+		fprintf(stderr, "%d: %d vertices\n", i, vertex_count);
 
 		// generate a refernce frame based on this face
 		refframe_t ref = {
@@ -129,7 +169,9 @@ main(void)
 		ref.y = v3_norm(v3_cross(ref.x, ref.z));
 
 		printf("<!-- face %d --><g>\n", i);
-		draw_face(stl, f, face_used, &ref);
+
+		for (int j = 0 ; j < vertex_count-1 ; j++)
+			svg_line(&ref, vertex_list[j]->p, vertex_list[j+1]->p);
 		printf("</g>\n");
 	}
 
