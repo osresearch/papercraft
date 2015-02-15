@@ -20,7 +20,7 @@ main(void)
 	stl_3d_t * const stl = stl_3d_parse(STDIN_FILENO);
 	if (!stl)
 		return EXIT_FAILURE;
-	const double thickness = 3;
+	const double thickness = 8;
 
 	// for each vertex, find the coplanar triangles
 	// \todo: do coplanar bits
@@ -61,11 +61,16 @@ main(void)
 			v3_t v4 = v3_sub(v1, n);
 			v3_t v5 = v3_sub(v2, n);
 
-			printf("%%polyhedron(\n"
+			printf("polyhedron(\n"
 				"points=[\n"
 				"[%f,%f,%f],[%f,%f,%f],[%f,%f,%f],\n"
 				"[%f,%f,%f],[%f,%f,%f],[%f,%f,%f],\n"
-				"], faces = [[0,1,2], [3,4,5]]);\n",
+				"], faces = ["
+				"  [0,2,1], [3,4,5],"
+				"  [0,3,2], [2,3,5],"
+				"  [0,4,3], [0,1,4],"
+				"  [1,5,4], [1,2,5],"
+				"]);\n",
 				v0.p[0], v0.p[1], v0.p[2],
 				v1.p[0], v1.p[1], v1.p[2],
 				v2.p[0], v2.p[1], v2.p[2],
