@@ -37,7 +37,7 @@ main(void)
 
 		printf("// vertex %d\n"
 			"translate([%f,%f,%f])\n"
-			"//render() difference()\n"
+			"render() difference()\n"
 			"{\n"
 			"sphere(r=15);\n",
 			i, origin.p[0], origin.p[1], origin.p[2]);
