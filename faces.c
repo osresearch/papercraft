@@ -220,7 +220,8 @@ main(void)
 			stl,
 			f,
 			vertex_list,
-			face_used
+			face_used,
+			0
 		);
 
 		fprintf(stderr, "%d: %d vertices\n", i, vertex_count);

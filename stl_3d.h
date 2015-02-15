@@ -59,7 +59,8 @@ stl_trace_face(
 	const stl_3d_t * const stl,
 	const stl_face_t * const f_start,
 	const stl_vertex_t ** vertex_list,
-	int * const face_used
+	int * const face_used,
+	int start_vertex
 );
 
 

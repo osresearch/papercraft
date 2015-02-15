@@ -243,11 +243,12 @@ stl_trace_face(
 	const stl_3d_t * const stl,
 	const stl_face_t * const f_start,
 	const stl_vertex_t ** vertex_list,
-	int * const face_used
+	int * const face_used,
+	const int start_vertex
 )
 {
 	const stl_face_t * f = f_start;
-	int i = 0;
+	int i = start_vertex;
 	int vertex_count = 0;
 
 	do {
@@ -288,7 +289,7 @@ stl_trace_face(
 
 		// keep going until we reach our starting face
 		// at vertex 0.
-	} while (f != f_start || i != 0);
+	} while (f != f_start || i != start_vertex);
 
 	return vertex_count;
 }
