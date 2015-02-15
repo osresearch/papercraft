@@ -79,7 +79,7 @@ main(void)
 				"points=[\n"
 				"[%f,%f,%f],[%f,%f,%f],[%f,%f,%f],\n"
 				"[%f,%f,%f],[%f,%f,%f],[%f,%f,%f],\n"
-				"], faces = ["
+				"], %s = ["
 				"  [0,1,2], [3,5,4],"
 				"  [0,2,3], [2,5,3],"
 				"  [0,3,4], [0,4,1],"
@@ -90,14 +90,19 @@ main(void)
 				v2.p[0], v2.p[1], v2.p[2],
 				v3.p[0], v3.p[1], v3.p[2],
 				v4.p[0], v4.p[1], v4.p[2],
-				v5.p[0], v5.p[1], v5.p[2]
+				v5.p[0], v5.p[1], v5.p[2],
+#ifdef __linux__
+				"triangles"
+#else
+				"faces"
+#endif
 			);
 				
 			//break; // only do one right now
 		}
 
 		printf("}\n");
-		//if (i == 0) break; // only do one right now
+		if (i == 1) break; // only do one right now
 	}
 
 	return 0;
