@@ -14,7 +14,7 @@
 #include "stl_3d.h"
 
 static const char * stroke_string
-	= "stroke-width=\"1px\" fill=\"none\"";
+	= "stroke-width=\"0.1px\" fill=\"none\"";
 
 typedef struct
 {
@@ -86,63 +86,6 @@ svg_circle(
 	);
 }
 
-
-/** Starting at a point, trace the coplanar polygon and return a
- * list of vertices.
- */
-int
-trace_face(
-	const stl_3d_t * const stl,
-	const stl_face_t * const f_start,
-	const stl_vertex_t ** vertex_list,
-	int * const face_used
-)
-{
-	const stl_face_t * f = f_start;
-	int i = 0;
-	int vertex_count = 0;
-
-	do {
-		const stl_vertex_t * const v1 = f->vertex[(i+0) % 3];
-		const stl_vertex_t * const v2 = f->vertex[(i+1) % 3];
-		const stl_face_t * const f_next = f->face[i];
-
-		fprintf(stderr, "%p %d: %f,%f,%f\n", f, i, v1->p.p[0], v1->p.p[1], v1->p.p[2]);
-		face_used[f - stl->face] = 1;
-
-		if (!f_next || f->angle[i] != 0)
-		{
-			// not coplanar or no connection.
-			// add the NEXT vertex on this face and continue
-			vertex_list[vertex_count++] = v2;
-			i = (i+1) % 3;
-			continue;
-		}
-
-		// coplanar; figure out which vertex on the next
-		// face we start at
-		int i_next = -1;
-		for (int j = 0 ; j < 3 ; j++)
-		{
-			if (f_next->vertex[j] != v1)
-				continue;
-			i_next = j;
-			break;
-		}
-
-		if (i_next == -1)
-			abort();
-		
-		// move to the new face
-		f = f_next;
-		i = i_next;
-
-		// keep going until we reach our starting face
-		// at vertex 0.
-	} while (f != f_start || i != 0);
-
-	return vertex_count;
-}
 
 //  Determines the intersection point of the line defined by points A and B with the
 //  line defined by points C and D.
@@ -286,7 +229,7 @@ main(void)
 	if (!stl)
 		return EXIT_FAILURE;
 	const double inset_distance = 8;
-	const double hole_radius = 3;
+	const double hole_radius = 1.5;
 
 	int * const face_used = calloc(sizeof(*face_used), stl->num_face);
 
@@ -303,7 +246,12 @@ main(void)
 			continue;
 
 		const stl_face_t * const f = &stl->face[i];
-		const int vertex_count = trace_face(stl, f, vertex_list, face_used);
+		const int vertex_count = stl_trace_face(
+			stl,
+			f,
+			vertex_list,
+			face_used
+		);
 
 		fprintf(stderr, "%d: %d vertices\n", i, vertex_count);
 

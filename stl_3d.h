@@ -43,4 +43,24 @@ stl_3d_parse(
 	int fd
 );
 
+
+/** Generate the list of vertices that are coplanar given a starting
+ * vertex in the stl file.
+ *
+ * vertex_list should have enough space to contain at least as many
+ * vertices as in the stl file.
+ *
+ * if face_used is not null it will be populated with which faces
+ * have been traversed during the search.  it should have enough size
+ * to contain all of the faces in the file.
+ */
+int
+stl_trace_face(
+	const stl_3d_t * const stl,
+	const stl_face_t * const f_start,
+	const stl_vertex_t ** vertex_list,
+	int * const face_used
+);
+
+
 #endif
