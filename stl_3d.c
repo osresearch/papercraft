@@ -57,6 +57,9 @@ stl_vertex_find(
 }
 
 
+/** Check to see if the two faces share an edge.
+ * \return 0 if no common edge, 1 if there is a shared link
+ */
 static int
 stl_has_edge(
 	const stl_face_t * const f,
@@ -73,13 +76,61 @@ stl_has_edge(
 }
 
 
+/** Compute the angle between the two planes.
+ * This is an approximation:
+ * \return 0 == coplanar, negative == valley, positive == mountain.
+ */
 static double
 stl_angle(
 	const stl_face_t * const f1,
 	const stl_face_t * const f2
 )
 {
-	return 0;
+	// find the four distinct points
+	v3_t x1 = f1->vertex[0]->p;
+	v3_t x2 = f1->vertex[1]->p;
+	v3_t x3 = f1->vertex[2]->p;
+	v3_t x4;
+
+	for (int i = 0 ; i < 3 ; i++)
+	{
+		x4 = f2->vertex[i]->p;
+		if (v3_eq(&x1, &x4))
+			continue;
+		if (v3_eq(&x2, &x4))
+			continue;
+		if (v3_eq(&x3, &x4))
+			continue;
+		break;
+	}
+
+	// (x3-x1) . ((x2-x1) X (x4-x3)) == 0
+	v3_t dx31 = v3_sub(x3, x1);
+	v3_t dx21 = v3_sub(x2, x1);
+	v3_t dx43 = v3_sub(x4, x3);
+	v3_t cross = v3_cross(dx21, dx43);
+	float dot = v3_dot(dx31, cross);
+
+	if (debug)
+	fprintf(stderr, "dot %f:\n %f,%f,%f\n %f,%f,%f\n %f,%f,%f\n %f,%f,%f\n",
+		dot,
+		x1.p[0], x1.p[1], x1.p[2],
+		x2.p[0], x2.p[1], x2.p[2],
+		x3.p[0], x3.p[1], x3.p[2],
+		x4.p[0], x4.p[1], x4.p[2]
+	);
+	
+	int check = -EPS < dot && dot < +EPS;
+
+	// if the dot product is not close enough to zero, they
+	// are not coplanar.
+	if (check)
+		return 0;
+
+	if (dot < 0)
+		return -1;
+	else
+		return +1;
 }
 
 
