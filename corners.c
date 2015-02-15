@@ -202,18 +202,16 @@ int main(void)
 		fprintf(stderr, "%d: %f,%f,%f\n",
 			i, v->p.p[0], v->p.p[1], v->p.p[2]);
 
-		int face_used[v->num_faces] = {};
-
 		for (int j = 0 ; j < v->num_face; j++)
 		{
-			const stl_face_t * const f = &v->face[j];
-			face_used[j] = 1;
+			const stl_face_t * const f = v->face[j];
 
-			for (int k = 0 ; k < v->num_faces ; k++)
-			{
-				if (face_used[k])
-					continue;
-				if (coplanar
+			fprintf(stderr, "\t%d: %d,%d,%d\n",
+				f - stl->face,
+				f->face[0] ? f->face[0] - stl->face : -1,
+				f->face[1] ? f->face[1] - stl->face : -1,
+				f->face[2] ? f->face[2] - stl->face : -1
+			);
 		}
 	}
 #if 0

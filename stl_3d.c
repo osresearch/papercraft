@@ -57,6 +57,62 @@ stl_vertex_find(
 }
 
 
+static int
+stl_has_edge(
+	const stl_face_t * const f,
+	const stl_vertex_t * const v1,
+	const stl_vertex_t * const v2
+)
+{
+	if (f->vertex[0] != v1 && f->vertex[1] != v1 && f->vertex[2] != v1)
+		return 0;
+	if (f->vertex[0] != v2 && f->vertex[1] != v2 && f->vertex[2] != v2)
+		return 0;
+
+	return 1;
+}
+
+
+static double
+stl_angle(
+	const stl_face_t * const f1,
+	const stl_face_t * const f2
+)
+{
+	return 0;
+}
+
+
+static void
+stl_find_neighbors(
+	stl_3d_t * const stl,
+	stl_face_t * const f1
+)
+{
+	for(int i = 0 ; i < 3 ; i++)
+	{
+		const stl_vertex_t * const v1 = f1->vertex[(i+0) % 3];
+		const stl_vertex_t * const v2 = f1->vertex[(i+1) % 3];
+
+		for(int j = 0 ; j < stl->num_face ; j++)
+		{
+			stl_face_t * const f2 = &stl->face[j];
+
+			// skip this triangle against itself
+			if (f1 == f2)
+				continue;
+
+			// find if these two triangles share an edge
+			if (!stl_has_edge(f2, v1, v2))
+				continue;
+
+			f1->face[i] = f2;
+			f1->angle[i] = stl_angle(f1, f2);
+		}
+	}
+}
+
+
 stl_3d_t *
 stl_3d_parse(
 	int fd
@@ -100,8 +156,11 @@ stl_3d_parse(
 		{
 			const v3_t * const p = &ft->p[j];
 
-			stl_vertex_t * const v
-				= stl_vertex_find(stl->vertex, &stl->num_vertex, p);
+			stl_vertex_t * const v = stl_vertex_find(
+				stl->vertex,
+				&stl->num_vertex,
+				p
+			);
 
 			// add this vertex to this face
 			f->vertex[j] = v;
@@ -116,20 +175,8 @@ stl_3d_parse(
 	// build the connections between each face
 	for(int i = 0 ; i < num_triangles ; i++)
 	{
-		stl_face_t * const f1 = &stl->face[i];
-
-		for(int j = 0 ; j < num_triangles ; j++)
-		{
-			stl_face_t * const f2 = &stl->face[j];
-
-			if (i == j)
-				continue;
-
-			// find if these two triangles share an edge
-			if (!stl_shared_edge(f1, f2))
-				continue;
-		}
-		
+		stl_face_t * const f = &stl->face[i];
+		stl_find_neighbors(stl, f);
 	}
 
 	return stl;

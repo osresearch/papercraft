@@ -23,6 +23,8 @@ struct stl_vertex {
 struct stl_face
 {
 	stl_vertex_t * vertex[3];
+	stl_face_t * face[3];
+	double angle[3];
 };
 
 
