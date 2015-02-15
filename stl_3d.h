@@ -63,4 +63,32 @@ stl_trace_face(
 );
 
 
+typedef struct
+{
+	v3_t origin;
+	v3_t x;
+	v3_t y;
+	v3_t z;
+} refframe_t;
+
+
+void
+refframe_init(
+	refframe_t * ref,
+	const v3_t p0,
+	const v3_t p1,
+	const v3_t p2
+);
+
+
+/** Project a 3D point onto a 2D space */
+void
+v3_project(
+	const refframe_t * const ref,
+	const v3_t p_in,
+	double * const x_out,
+	double * const y_out
+);
+
+
 #endif

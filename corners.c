@@ -25,6 +25,8 @@ main(void)
 
 	// for each vertex, find the coplanar triangles
 	// \todo: do coplanar bits
+	const stl_vertex_t ** const vertex_list = calloc(sizeof(**vertex_list), stl->num_vertex);
+
 	for(int i = 0 ; i < stl->num_vertex ; i++)
 	{
 		const stl_vertex_t * const v = &stl->vertex[i];
@@ -37,10 +39,43 @@ main(void)
 			"sphere(r=20);\n",
 			i, origin.p[0], origin.p[1], origin.p[2]);
 		
+		int * const face_used = calloc(sizeof(*face_used), stl->num_face);
 
 		for (int j = 0 ; j < v->num_face; j++)
 		{
+			// generate the polygon face for this vertex
 			const stl_face_t * const f = v->face[j];
+			if (face_used[f - stl->face])
+				continue;
+			const int vertex_count = stl_trace_face(
+				stl,
+				f,
+				vertex_list,
+				face_used
+			);
+
+			refframe_t ref;
+			refframe_init(&ref,
+				f->vertex[(v->face_num[j]+0) % 3]->p,
+				f->vertex[(v->face_num[j]+1) % 3]->p,
+				f->vertex[(v->face_num[j]+2) % 3]->p
+			);
+
+			printf("linear_extrude(height=%f) polygon(points=[\n",
+				thickness
+			);
+
+			for(int k=0 ; k < vertex_count ; k++)
+			{
+				double x, y;
+				v3_project(&ref, vertex_list[k]->p, &x, &y);
+				printf("[%f,%f],", x, y);
+			}
+			printf("\n]);\n");
+
+			// generate a polyhedron that spans
+			// the width of this coplanar thingy
+#if 0
 			v3_t v0 = v3_sub(f->vertex[0]->p, origin);
 			v3_t v1 = v3_sub(f->vertex[1]->p, origin);
 			v3_t v2 = v3_sub(f->vertex[2]->p, origin);
@@ -97,9 +132,12 @@ main(void)
 				"faces"
 #endif
 			);
+#endif
 				
 			//break; // only do one right now
 		}
+
+		free(face_used);
 
 		printf("}\n");
 		if (i == 1) break; // only do one right now

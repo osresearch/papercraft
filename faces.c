@@ -16,36 +16,6 @@
 static const char * stroke_string
 	= "stroke-width=\"0.1px\" fill=\"none\"";
 
-typedef struct
-{
-	v3_t origin;
-	v3_t x;
-	v3_t y;
-	v3_t z;
-} refframe_t;
-
-
-static void
-v3_project(
-	const refframe_t * const ref,
-	const v3_t p_in,
-	double * const x_out,
-	double * const y_out
-)
-{
-	v3_t p = v3_sub(p_in, ref->origin);
-
-	double x = ref->x.p[0]*p.p[0] + ref->x.p[1]*p.p[1] + ref->x.p[2]*p.p[2];
-	double y = ref->y.p[0]*p.p[0] + ref->y.p[1]*p.p[1] + ref->y.p[2]*p.p[2];
-	double z = ref->z.p[0]*p.p[0] + ref->z.p[1]*p.p[1] + ref->z.p[2]*p.p[2];
-
-	fprintf(stderr, "%f,%f,%f\n", x, y, z);
-
-	*x_out = x;
-	*y_out = y;
-}
-
-
 static void
 svg_line(
 	const refframe_t * const ref,
@@ -256,17 +226,12 @@ main(void)
 		fprintf(stderr, "%d: %d vertices\n", i, vertex_count);
 
 		// generate a refernce frame based on this face
-		refframe_t ref = {
-			.origin = f->vertex[0]->p,
-		};
-
-		const v3_t dx = v3_norm(v3_sub(f->vertex[1]->p, ref.origin));
-		const v3_t dy = v3_norm(v3_sub(f->vertex[2]->p, ref.origin));
-
-		ref.x = dx;
-		ref.z = v3_norm(v3_cross(dx, dy));
-		ref.y = v3_norm(v3_cross(ref.x, ref.z));
-
+		refframe_t ref;
+		refframe_init(&ref,
+			f->vertex[0]->p,
+			f->vertex[1]->p,
+			f->vertex[2]->p
+		);
 		printf("<!-- face %d --><g>\n", i);
 
 		// generate the polygon outline (should be one path?)
