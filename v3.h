@@ -107,6 +107,35 @@ v3_scale(
 	return c;
 }
 
+
+static inline
+v3_t
+v3_norm(
+	const v3_t v
+)
+{
+	return v3_scale(v, 1/v3_mag(v));
+}
+
+
+static inline
+v3_t
+v3_mid(
+	const v3_t v0,
+	const v3_t v1,
+	const v3_t v2
+)
+{
+	return v3_norm(
+		v3_add(
+			v3_sub(v1, v0),
+			v3_sub(v2, v0)
+		)
+	);
+}
+
+
+
 static inline float
 v3_dot(
 	v3_t a,

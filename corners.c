@@ -21,6 +21,7 @@ main(void)
 	if (!stl)
 		return EXIT_FAILURE;
 	const double thickness = 6;
+	const double offset = 8;
 
 	// for each vertex, find the coplanar triangles
 	// \todo: do coplanar bits
@@ -30,10 +31,10 @@ main(void)
 		const v3_t origin = v->p;
 
 		printf("// vertex %d\n"
-			"//translate([%f,%f,%f])\n"
+			"translate([%f,%f,%f])\n"
 			"//render() difference()\n"
 			"{\n"
-			"//sphere(r=20);\n",
+			"sphere(r=20);\n",
 			i, origin.p[0], origin.p[1], origin.p[2]);
 		
 
@@ -45,6 +46,7 @@ main(void)
 			v3_t v2 = v3_sub(f->vertex[2]->p, origin);
 			v3_t n;
 
+			// compute normal of the face
 			if (v->face_num[j] == 0)
 				n = v3_cross(v1, v2);
 			else
@@ -55,8 +57,17 @@ main(void)
 				n = v3_cross(v0, v1);
 
 			n = v3_scale(n, (thickness+1)/v3_mag(n)/2);
-			v3_t n2 = v3_scale(n, 1/v3_mag(n));
 
+			// slide the vectors towards the center
+			v3_t v0mid = v3_scale(v3_mid(v0, v1, v2), offset);
+			v3_t v1mid = v3_scale(v3_mid(v1, v0, v2), offset);
+			v3_t v2mid = v3_scale(v3_mid(v2, v0, v1), offset);
+
+			v0 = v3_add(v0, v0mid);
+			v1 = v3_add(v1, v1mid);
+			v2 = v3_add(v2, v2mid);
+
+			// compute the 
 			v3_t v3 = v3_add(v0, n);
 			v3_t v4 = v3_add(v1, n);
 			v3_t v5 = v3_add(v2, n);
@@ -86,7 +97,7 @@ main(void)
 		}
 
 		printf("}\n");
-		if (i == 0) break; // only do one right now
+		//if (i == 0) break; // only do one right now
 	}
 
 	return 0;
