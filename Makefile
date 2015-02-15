@@ -10,11 +10,12 @@ CFLAGS = \
 LDLIBS = \
 	-lm \
 
-all: unfold wireframe corners
+all: unfold wireframe corners faces
 
 unfold: unfold.o
 wireframe: wireframe.o
 corners: corners.o stl_3d.o
+faces: faces.o stl_3d.o
 
 clean:
 	$(RM) *.o
