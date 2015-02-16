@@ -121,14 +121,14 @@ main(void)
 		return EXIT_FAILURE;
 	const double thickness = 3;
 	const double inset_dist = 2;
-	const double hole_dist = 6;
+	const double hole_dist = 7;
 	const double hole_rad = 3.3/2;
 	const double hole_height = 40;
 
 	// for each vertex, find the coplanar triangles
 	// \todo: do coplanar bits
 
-	for(int i = 0 ; i < stl->num_vertex ; i++)
+	for(int i = 18 ; i < stl->num_vertex ; i++)
 	{
 		const stl_vertex_t * const v = &stl->vertex[i];
 		const v3_t origin = v->p;
