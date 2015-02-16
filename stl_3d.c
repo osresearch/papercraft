@@ -121,7 +121,7 @@ stl_angle(
 	);
 	
 	//int check = -EPS < dot && dot < +EPS;
-	int check = -1 < dot && dot < +1;
+	int check = -10 < dot && dot < +10;
 
 	// if the dot product is not close enough to zero, they
 	// are not coplanar.
