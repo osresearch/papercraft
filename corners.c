@@ -158,12 +158,12 @@ main(void)
 		const stl_vertex_t * const v = &stl->vertex[i];
 		const v3_t origin = v->p;
 
-		printf("// vertex %d\n"
-			"//translate([%f,%f,%f])\n"
-			"{\n"
+		printf("//translate([%f,%f,%f])\n"
+			"module vertex_%d() {\n"
 			"render() difference()\n"
 			"{\n",
-			i, origin.p[0], origin.p[1], origin.p[2]);
+			origin.p[0], origin.p[1], origin.p[2], i);
+
 		avg_x.p[0] = avg_x.p[1] = avg_x.p[2] = 0;
 		avg_y.p[0] = avg_y.p[1] = avg_y.p[2] = 0;
 		avg_z.p[0] = avg_z.p[1] = avg_z.p[2] = 0;
@@ -185,18 +185,24 @@ main(void)
 		printf("} // difference\n");
 
 		// add back in the mounting pegs
-		make_faces(stl, v, 0, 0, 0, hole_dist, hole_rad, thickness);
-		printf("} // union\n");
+		//make_faces(stl, v, 0, 0, 0, hole_dist, hole_rad, thickness);
+		printf("}\n");
+
+		refframe_t avg;
+		refframe_init(&avg, avg_x, avg_y, avg_z);
+
+		printf("translate([0,0,15]) render() intersection() {\n");
+		printf("rotate([0,-90,0])");
+		print_multmatrix(&avg, 1);
+		printf("vertex_%d();\n", i);
+		printf("cube([100,100,30], center=true);\n");
+		printf("}\n");
+		
 
 		break;
 		//if (i == 0) break; // only do one right now
 	}
 
-	refframe_t avg;
-	refframe_init(&avg, avg_x, avg_y, avg_z);
-	printf("%%");
-	print_multmatrix(&avg, 1);
 	//printf("translate([0,0,20]) sphere(r=2);\n");
-	printf("cube([50,50,50], center=true);\n");
 	return 0;
 }
