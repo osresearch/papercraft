@@ -16,4 +16,4 @@ module tetrahedron()
 	);
 }
 
-scale(100) tetrahedron();
+scale(50) tetrahedron();

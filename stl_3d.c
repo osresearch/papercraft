@@ -111,7 +111,7 @@ stl_angle(
 	v3_t cross = v3_cross(dx21, dx43);
 	float dot = v3_dot(dx31, cross);
 
-	//if (debug)
+	if (debug)
 	fprintf(stderr, "dot %f:\n %f,%f,%f\n %f,%f,%f\n %f,%f,%f\n %f,%f,%f\n",
 		dot,
 		x1.p[0], x1.p[1], x1.p[2],
