@@ -41,6 +41,7 @@ print_multmatrix(
 	);
 }
 
+
 static void
 make_faces(
 	const stl_3d_t * const stl,
@@ -94,41 +95,41 @@ make_faces(
 		// generate the polygon plane
 		if (thickness != 0)
 		{
-		printf("translate([0,0,%f]) linear_extrude(height=%f) polygon(points=[\n",
-			translate,
-			thickness
-		);
-
-		for(int k=0 ; k < vertex_count ; k++)
-		{
-			double x, y;
-			refframe_inset(&ref, inset_dist, &x, &y,
-				vertex_list[(k+0) % vertex_count]->p,
-				vertex_list[(k+1) % vertex_count]->p,
-				vertex_list[(k+2) % vertex_count]->p
+			printf("translate([0,0,%f]) linear_extrude(height=%f) polygon(points=[\n",
+				translate,
+				thickness
 			);
-			printf("[%f,%f],", x, y);
-		}
-		printf("\n]);\n");
+
+			for(int k=0 ; k < vertex_count ; k++)
+			{
+				double x, y;
+				refframe_inset(&ref, inset_dist, &x, &y,
+					vertex_list[(k+0) % vertex_count]->p,
+					vertex_list[(k+1) % vertex_count]->p,
+					vertex_list[(k+2) % vertex_count]->p
+				);
+				printf("[%f,%f],", x, y);
+			}
+			printf("\n]);\n");
 		}
 
 		// generate the mounting holes/pins
 		if (hole_rad != 0)
 		{
-		for(int k=0 ; k < vertex_count ; k++)
-		{
-			double x, y;
-			refframe_inset(&ref, inset_dist+hole_dist, &x, &y,
-				vertex_list[(k+0) % vertex_count]->p,
-				vertex_list[(k+1) % vertex_count]->p,
-				vertex_list[(k+2) % vertex_count]->p
-			);
-			printf("translate([%f,%f,0]) cylinder(r=%f,h=%f, $fs=1);\n",
-				x, y,
-				hole_rad,
-				hole_height
-			);
-		}
+			for(int k=0 ; k < vertex_count ; k++)
+			{
+				double x, y;
+				refframe_inset(&ref, inset_dist+hole_dist, &x, &y,
+					vertex_list[(k+0) % vertex_count]->p,
+					vertex_list[(k+1) % vertex_count]->p,
+					vertex_list[(k+2) % vertex_count]->p
+				);
+				printf("translate([%f,%f,%f]) cylinder(r=%f,h=%f, $fs=1);\n",
+					x, y, -hole_height/2,
+					hole_rad,
+					hole_height
+				);
+			}
 		}
 
 		printf("}\n");
@@ -148,7 +149,7 @@ main(void)
 	const double thickness = 3;
 	const double inset_dist = 2;
 	const double hole_dist = 5;
-	const double hole_rad = 3.3/2;
+	const double hole_rad = 3/2;
 
 	// for each vertex, find the coplanar triangles
 	// \todo: do coplanar bits
@@ -182,20 +183,20 @@ main(void)
 		printf("}\n");
 
 
+		// add the screw holes
+		make_faces(stl, v, 0, 0, 0, hole_dist, hole_rad, thickness*3);
 		printf("} // difference\n");
 
-		// add back in the mounting pegs
-		//make_faces(stl, v, 0, 0, 0, hole_dist, hole_rad, thickness);
 		printf("}\n");
 
 		refframe_t avg;
 		refframe_init(&avg, avg_x, avg_y, avg_z);
 
-		printf("translate([0,0,15]) render() intersection() {\n");
+		printf("translate([0,0,12]) render() intersection() {\n");
 		printf("rotate([0,-90,0])");
 		print_multmatrix(&avg, 1);
 		printf("vertex_%d();\n", i);
-		printf("cube([100,100,30], center=true);\n");
+		printf("cube([100,100,24], center=true);\n");
 		printf("}\n");
 		
 
