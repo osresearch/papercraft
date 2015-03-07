@@ -7,10 +7,10 @@
 use warnings;
 use strict;
 
-my $sections = 12;
-my $thickness = 50;
-my $twist = 240.0;
-my $radius = [70,0,0];
+my $sections = 9;
+my $thickness = 150;
+my $twist = 120.0;
+my $radius = [200,0,0];
 my $pi = 2*atan2(1,0);
 
 my $h = sqrt(3)/2;
