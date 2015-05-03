@@ -1,6 +1,8 @@
 /** \file
  * Generate an OpenSCAD with connectors for each face.
  *
+ * This imports the original STL file and then slices the corners
+ * off from it. 
  * Options are inside only (with face flush on outside)
  * or with a slot for the face (like a corner cap)
  */
@@ -9,6 +11,9 @@
 #include <stdint.h>
 #include <stdarg.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <math.h>
 #include <err.h>
 #include <assert.h>
@@ -89,7 +94,7 @@ make_faces(
 		// use the transpose of the rotation matrix,
 		// which will rotate from (x,y) to the correct
 		// orientation relative to this connector node.
-		print_multmatrix(&ref, 0);
+		print_multmatrix(&ref, 1);
 		printf("{\n");
 
 		// generate the polygon plane
@@ -141,23 +146,120 @@ make_faces(
 
 
 int
-main(void)
+main(
+	int argc,
+	char ** argv
+)
 {
-	stl_3d_t * const stl = stl_3d_parse(STDIN_FILENO);
+	if (argc <= 1)
+	{
+		fprintf(stderr, "Usage: corners file.stl > file-corners.scad\n");
+		return -1;
+	}
+
+	const char * const stl_name = argv[1];
+	int fd = open(stl_name, O_RDONLY);
+	if (fd < 0)
+	{
+		perror(stl_name);
+		return -1;
+	}
+
+	stl_3d_t * const stl = stl_3d_parse(fd);
 	if (!stl)
 		return EXIT_FAILURE;
+	close(fd);
+
+	printf("module model() {\n"
+		"render() difference() {\n"
+	 	"import(\"%s\");\n",
+		stl_name
+	);
+	//printf("%%model();\n");
+
 	const double thickness = 3;
-	const double inset_dist = 2;
+	const double inset_dist = 5;
 	const double hole_dist = 5;
-	const double hole_rad = 3/2;
+	const double hole_rad = 1.25;
 
-	// for each vertex, find the coplanar triangles
-	// \todo: do coplanar bits
+	// for face, generate the set of coplanar points that go with it
+	int * const face_used
+		= calloc(sizeof(*face_used), stl->num_face);
+	const stl_vertex_t ** const vertex_list
+		= calloc(sizeof(*vertex_list), stl->num_vertex);
 
+	for (int i = 0 ; i < stl->num_face ; i++)
+	{
+		if (face_used[i])
+			continue;
+
+		const stl_face_t * const f = &stl->face[i];
+		const int vertex_count = stl_trace_face(
+			stl,
+			f,
+			vertex_list,
+			face_used,
+			0
+		);
+
+		refframe_t ref;
+		refframe_init(
+			&ref,
+			f->vertex[0]->p,
+			f->vertex[1]->p,
+			f->vertex[2]->p
+		);
+
+		// replace the origin with the actual origin
+		//ref.origin.p[0] = 0;
+		//ref.origin.p[1] = 0;
+		//ref.origin.p[2] = 0;
+
+		printf("translate([%f,%f,%f])",
+			f->vertex[0]->p.p[0],
+			f->vertex[0]->p.p[1],
+			f->vertex[0]->p.p[2]
+		);
+			
+		print_multmatrix(&ref, 0);
+		printf("{\n");
+
+		// generate a bolt hole for each non-copolanar corner
+		for (int j = 0 ; j < vertex_count ; j++)
+		{
+			double x, y;
+			refframe_inset(
+				&ref,
+				inset_dist,
+				&x,
+				&y,
+				vertex_list[(j+0) % vertex_count]->p,
+				vertex_list[(j+1) % vertex_count]->p,
+				vertex_list[(j+2) % vertex_count]->p
+			);
+
+			printf("translate([%f,%f,0]) cylinder(r=%f, h=%f, center=true);\n",
+				x,
+				y,
+				hole_rad,
+				10.0
+			);
+		}
+
+		printf("}\n");
+	}
+
+	printf("}\n}\n");
+
+	printf("model();\n");
+#if 0
 	for(int i = 0 ; i < stl->num_vertex ; i++)
 	{
 		const stl_vertex_t * const v = &stl->vertex[i];
 		const v3_t origin = v->p;
+
+		// generate screw holes for each face connecting to this corner
+		
 
 		printf("//translate([%f,%f,%f])\n"
 			"module vertex_%d() {\n"
@@ -192,7 +294,7 @@ main(void)
 		refframe_t avg;
 		refframe_init(&avg, avg_x, avg_y, avg_z);
 
-		printf("translate([0,0,12]) render() intersection() {\n");
+		printf("translate([%d,0,12]) render() intersection() {\n", i*30);
 		printf("rotate([0,-90,0])");
 		print_multmatrix(&avg, 1);
 		printf("vertex_%d();\n", i);
@@ -200,10 +302,11 @@ main(void)
 		printf("}\n");
 		
 
-		break;
+		//break;
 		//if (i == 0) break; // only do one right now
 	}
 
 	//printf("translate([0,0,20]) sphere(r=2);\n");
+#endif
 	return 0;
 }
