@@ -85,6 +85,10 @@ find_normal(
 		if (face_used[f - stl->face])
 			continue;
 
+		//ref.origin.p[0] = 0;
+		//ref.origin.p[1] = 0;
+		//ref.origin.p[2] = 0;
+
 		const int start_vertex = v->face_num[j];
 		const int vertex_count = stl_trace_face(
 			stl,
@@ -104,16 +108,63 @@ find_normal(
 
 			v3_t p1 = vertex_list[(k+vertex_count-1) % vertex_count]->p;
 			v3_t p2 = vertex_list[k % vertex_count]->p;
-			v3_t p3 = vertex_list[(k+2) % vertex_count]->p;
+			v3_t p3 = vertex_list[(k+1) % vertex_count]->p;
 
-			*avg = v3_add(*avg, v3_norm(v3_sub(p2, p1)));
-			*avg = v3_add(*avg, v3_norm(v3_sub(p2, p3)));
+			refframe_t ref;
+			refframe_init(
+				&ref,
+				p2,
+				p3,
+				p1
+			);
+
+			double x, y;
+			refframe_inset(&ref, inset_dist, &x, &y, p1, p2, p3);
+
+			v3_t hole = refframe_project(&ref, (v3_t){{x,y,0}});
+			//hole = refframe_project(&ref, (v3_t){{10,0,0}});
+			//hole.p[0] = 10*ref.x.p[0]; // + ref.origin.p[0];
+			//hole.p[1] = 10*ref.x.p[1]; // + ref.origin.p[1];
+			//hole.p[2] = 10*ref.x.p[2]; // + ref.origin.p[2];
+			fprintf(stderr, "**** %p [%f,%f]=>%f,%f,%f\n", v, x, y,
+				hole.p[0],
+				hole.p[1],
+				hole.p[2]
+			);
+
+			printf("color(\"green\") translate([%f,%f,%f]) sphere(r=1);\n",
+				hole.p[0],
+				hole.p[1],
+				hole.p[2]
+			);
+
+#if 0
+			hole = refframe_project(&ref, (v3_t){10,0,0});
+			//v3_t hole = refframe_project(&ref, (v3_t){5,5,0});
+			printf("translate([%f,%f,%f]) sphere(r=1);\n",
+				hole.p[0],
+				hole.p[1],
+				hole.p[2]
+			);
+/*
+			hole = refframe_project(&ref, (v3_t){0,10,0});
+			//v3_t hole = refframe_project(&ref, (v3_t){5,5,0});
+			printf("%%translate([%f,%f,%f]) sphere(r=1);\n",
+				hole.p[0],
+				hole.p[1],
+				hole.p[2]
+			);
+*/
+#endif
+
+			*avg = v3_add(*avg, ref.z);
+			//*avg = v3_add(*avg, ref.x);
 
 			//avg_x = v3_add(avg_x, ref.x);
 			//avg_y = v3_add(avg_y, ref.y);
 			//*avg = v3_add(*avg, p);
-			break;
 		}
+		//return;
 	}
 
 #if 0
@@ -288,12 +339,14 @@ main(
 		const stl_vertex_t * const v = &stl->vertex[i];
 		const v3_t origin = v->p;
 
-		v3_t avg = { 0, 0, 0};
+		v3_t avg = {{ 0, 0, 0}};
 		find_normal(stl, v, inset_dist, &avg);
 		printf("%%translate([%f,%f,%f])", 
 			origin.p[0], origin.p[1], origin.p[2]);
 		print_normal(&avg);
-		printf("cylinder(r=15,h=20, center=true);\n");
+		printf("rotate([0,180,0]) cylinder(r=15,h=10);\n");
+
+		//avg = v3_norm(avg);
 
 	}
 

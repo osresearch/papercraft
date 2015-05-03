@@ -476,16 +476,19 @@ refframe_project(
 	const v3_t p
 )
 {
-	v3_t o = { 0, 0, 0 };
-	o.p[0] = 0
+	v3_t o;
+
+	o.p[0] = ref->origin.p[0]
 		+ ref->x.p[0] * p.p[0]
 		+ ref->y.p[0] * p.p[1]
-		+ ref->x.p[0] * p.p[2];
-	o.p[1] = 0
+		+ ref->z.p[0] * p.p[2];
+
+	o.p[1] = ref->origin.p[1]
 		+ ref->x.p[1] * p.p[0]
 		+ ref->y.p[1] * p.p[1]
 		+ ref->z.p[1] * p.p[2];
-	o.p[2] = 0
+
+	o.p[2] = ref->origin.p[2]
 		+ ref->x.p[2] * p.p[0]
 		+ ref->y.p[2] * p.p[1]
 		+ ref->z.p[2] * p.p[2];
