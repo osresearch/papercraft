@@ -49,7 +49,8 @@ print_multmatrix(
 
 static void
 print_normal(
-	const v3_t * normal
+	const v3_t * normal,
+	int flip
 )
 {
 	const float x = normal->p[0];
@@ -59,9 +60,13 @@ print_normal(
 	const double b = acos(z / length);
 	const double c = x == 0 ? sign(y)*90 : atan2(y,x);
 
-	//printf("rotate([%f,%f,%f])\n", 0.0, b * 180 / M_PI, c * 180 / M_PI);
-	printf("rotate([0,%f,0])", -b*180/M_PI);
-	printf("rotate([0,0,%f])", -c*180/M_PI);
+	if (flip)
+	{
+		printf("rotate([0,%f,0])", -b*180/M_PI);
+		printf("rotate([0,0,%f])", -c*180/M_PI);
+	} else {
+		printf("rotate([%f,%f,%f])\n", 0.0, b * 180 / M_PI, c * 180 / M_PI);
+	}
 }
 
 
@@ -328,7 +333,9 @@ main(
 
 	printf("}\n}\n");
 
-	//printf("model();\n");
+	const int flip = 1;
+	if (!flip)
+		printf("model();\n");
 
 
 	// For each vertex, extract a small region around the corner
@@ -343,16 +350,28 @@ main(
 		v3_t avg = {{ 0, 0, 0}};
 		find_normal(stl, v, inset_dist, &avg);
 
+		if (flip)
+		{
 		printf("translate([%f,%f,20])", (i/div)*spacing, (i%div)*spacing);
 		printf("render() intersection()");
+		}
+
 		printf("{\n");
 
 		//printf("%%\n");
-		print_normal(&avg);
-		printf("translate([%f,%f,%f])", 
-			-origin.p[0], -origin.p[1], -origin.p[2]);
-		printf("model();\n");
-		printf("translate([0,0,-20]) cylinder(r=15,h=20);\n");
+		if (flip)
+		{
+			print_normal(&avg, 1);
+			printf("translate([%f,%f,%f])", 
+				-origin.p[0], -origin.p[1], -origin.p[2]);
+			printf("model();\n");
+			printf("translate([0,0,-20]) cylinder(r=15,h=20);\n");
+		} else {
+			printf("translate([%f,%f,%f])", 
+				origin.p[0], origin.p[1], origin.p[2]);
+			print_normal(&avg, 0);
+			printf("%%translate([0,0,-20]) cylinder(r=15,h=20);\n");
+		}
 
 		//avg = v3_norm(avg);
 
