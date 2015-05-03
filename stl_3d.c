@@ -468,3 +468,27 @@ refframe_inset(
 	*x_out = *y_out = 0;
 	fprintf(stderr, "inset failed 2\n");
 }
+
+
+v3_t
+refframe_project(
+	const refframe_t * const ref,
+	const v3_t p
+)
+{
+	v3_t o = { 0, 0, 0 };
+	o.p[0] = 0
+		+ ref->x.p[0] * p.p[0]
+		+ ref->y.p[0] * p.p[1]
+		+ ref->x.p[0] * p.p[2];
+	o.p[1] = 0
+		+ ref->x.p[1] * p.p[0]
+		+ ref->y.p[1] * p.p[1]
+		+ ref->z.p[1] * p.p[2];
+	o.p[2] = 0
+		+ ref->x.p[2] * p.p[0]
+		+ ref->y.p[2] * p.p[1]
+		+ ref->z.p[2] * p.p[2];
+
+	return o;
+}

@@ -102,5 +102,11 @@ v3_project(
 	double * const y_out
 );
 
+/** Project a point in a reference frame back into 3D */
+v3_t
+refframe_project(
+	const refframe_t * const ref,
+	const v3_t p
+);
 
 #endif
