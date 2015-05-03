@@ -48,21 +48,35 @@ print_multmatrix(
 
 
 static void
-make_faces(
-	const stl_3d_t * const stl,
-	const stl_vertex_t * const v,
-	const double thickness,
-	const double translate,
-	const double inset_dist,
-	const double hole_dist,
-	const double hole_rad,
-	const double hole_height
+print_normal(
+	const v3_t * normal
 )
 {
-	int * const face_used = calloc(sizeof(*face_used), stl->num_face);
+	const float x = normal->p[0];
+	const float y = normal->p[1];
+	const float z = normal->p[2];
+	const double length = sqrt(x*x+y*y+z*z);
+	const double b = acos(z / length);
+	const double c = x == 0 ? sign(y)*90 : atan2(y,x);
+
+	printf("rotate([%f,%f,%f])\n", 0.0, b * 180 / M_PI, c * 180 / M_PI);
+}
+
+
+static void
+find_normal(
+	const stl_3d_t * const stl,
+	const stl_vertex_t * const v,
+	const float inset_dist,
+	v3_t * const avg
+)
+{
+	int * const face_used
+		= calloc(sizeof(*face_used), stl->num_face);
 
 	// generate all of the coplanar polygons at this vertex
-	const stl_vertex_t ** const vertex_list = calloc(sizeof(**vertex_list), stl->num_vertex);
+	const stl_vertex_t ** const vertex_list
+		= calloc(sizeof(**vertex_list), stl->num_vertex);
 
 	for (int j = 0 ; j < v->num_face; j++)
 	{
@@ -80,17 +94,29 @@ make_faces(
 			start_vertex
 		);
 
-		refframe_t ref;
-		refframe_init(&ref,
-			f->vertex[(start_vertex+0) % 3]->p,
-			f->vertex[(start_vertex+1) % 3]->p,
-			f->vertex[(start_vertex+2) % 3]->p
-		);
+		// find this vertex in the vertex list
+		// and compute the vector that subdivides the
+		// two outbound edges
+		for (int k = 0 ; k < vertex_count ; k++)
+		{
+			if (vertex_list[k] != v)
+				continue;
 
-		avg_x = v3_add(avg_x, ref.x);
-		avg_y = v3_add(avg_y, ref.y);
-		avg_z = v3_add(avg_z, ref.z);
+			v3_t p1 = vertex_list[(k+vertex_count-1) % vertex_count]->p;
+			v3_t p2 = vertex_list[k % vertex_count]->p;
+			v3_t p3 = vertex_list[(k+2) % vertex_count]->p;
 
+			*avg = v3_add(*avg, v3_norm(v3_sub(p2, p1)));
+			*avg = v3_add(*avg, v3_norm(v3_sub(p2, p3)));
+
+			//avg_x = v3_add(avg_x, ref.x);
+			//avg_y = v3_add(avg_y, ref.y);
+			//*avg = v3_add(*avg, p);
+			break;
+		}
+	}
+
+#if 0
 		// use the transpose of the rotation matrix,
 		// which will rotate from (x,y) to the correct
 		// orientation relative to this connector node.
@@ -139,6 +165,7 @@ make_faces(
 
 		printf("}\n");
 	}
+#endif
 
 	free(face_used);
 	free(vertex_list);
@@ -182,12 +209,13 @@ main(
 	const double hole_dist = 5;
 	const double hole_rad = 1.25;
 
-	// for face, generate the set of coplanar points that go with it
 	int * const face_used
 		= calloc(sizeof(*face_used), stl->num_face);
 	const stl_vertex_t ** const vertex_list
 		= calloc(sizeof(*vertex_list), stl->num_vertex);
 
+	// for face, generate the set of coplanar points that go with it
+	// and "drill" holes in the model for those corners.
 	for (int i = 0 ; i < stl->num_face ; i++)
 	{
 		if (face_used[i])
@@ -252,21 +280,24 @@ main(
 	printf("}\n}\n");
 
 	printf("model();\n");
-#if 0
+
+
+	// For each vertex, extract a small region around the corner
 	for(int i = 0 ; i < stl->num_vertex ; i++)
 	{
 		const stl_vertex_t * const v = &stl->vertex[i];
 		const v3_t origin = v->p;
 
-		// generate screw holes for each face connecting to this corner
-		
+		v3_t avg = { 0, 0, 0};
+		find_normal(stl, v, inset_dist, &avg);
+		printf("%%translate([%f,%f,%f])", 
+			origin.p[0], origin.p[1], origin.p[2]);
+		print_normal(&avg);
+		printf("cylinder(r=15,h=20, center=true);\n");
 
-		printf("//translate([%f,%f,%f])\n"
-			"module vertex_%d() {\n"
-			"render() difference()\n"
-			"{\n",
-			origin.p[0], origin.p[1], origin.p[2], i);
+	}
 
+#if 0
 		avg_x.p[0] = avg_x.p[1] = avg_x.p[2] = 0;
 		avg_y.p[0] = avg_y.p[1] = avg_y.p[2] = 0;
 		avg_z.p[0] = avg_z.p[1] = avg_z.p[2] = 0;
