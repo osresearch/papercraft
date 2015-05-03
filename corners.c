@@ -59,7 +59,9 @@ print_normal(
 	const double b = acos(z / length);
 	const double c = x == 0 ? sign(y)*90 : atan2(y,x);
 
-	printf("rotate([%f,%f,%f])\n", 0.0, b * 180 / M_PI, c * 180 / M_PI);
+	//printf("rotate([%f,%f,%f])\n", 0.0, b * 180 / M_PI, c * 180 / M_PI);
+	printf("rotate([0,%f,0])", -b*180/M_PI);
+	printf("rotate([0,0,%f])", -c*180/M_PI);
 }
 
 
@@ -132,13 +134,13 @@ find_normal(
 				hole.p[2]
 			);
 
+#if 0
 			printf("color(\"green\") translate([%f,%f,%f]) sphere(r=1);\n",
 				hole.p[0],
 				hole.p[1],
 				hole.p[2]
 			);
 
-#if 0
 			hole = refframe_project(&ref, (v3_t){10,0,0});
 			//v3_t hole = refframe_project(&ref, (v3_t){5,5,0});
 			printf("translate([%f,%f,%f]) sphere(r=1);\n",
@@ -157,14 +159,10 @@ find_normal(
 */
 #endif
 
-			*avg = v3_add(*avg, ref.z);
-			//*avg = v3_add(*avg, ref.x);
-
-			//avg_x = v3_add(avg_x, ref.x);
-			//avg_y = v3_add(avg_y, ref.y);
-			//*avg = v3_add(*avg, p);
+			//*avg = v3_add(*avg, ref.z);
+			*avg = v3_add(*avg, v3_norm(v3_sub(ref.origin, hole)));
+			//*avg = v3_add(*avg, (v3_sub(hole, ref.origin)));
 		}
-		//return;
 	}
 
 #if 0
@@ -330,10 +328,13 @@ main(
 
 	printf("}\n}\n");
 
-	printf("model();\n");
+	//printf("model();\n");
 
 
 	// For each vertex, extract a small region around the corner
+	const int div = sqrt(stl->num_vertex);
+	const double spacing = 32;
+
 	for(int i = 0 ; i < stl->num_vertex ; i++)
 	{
 		const stl_vertex_t * const v = &stl->vertex[i];
@@ -341,56 +342,22 @@ main(
 
 		v3_t avg = {{ 0, 0, 0}};
 		find_normal(stl, v, inset_dist, &avg);
-		printf("%%translate([%f,%f,%f])", 
-			origin.p[0], origin.p[1], origin.p[2]);
+
+		printf("translate([%f,%f,20])", (i/div)*spacing, (i%div)*spacing);
+		printf("render() intersection()");
+		printf("{\n");
+
+		//printf("%%\n");
 		print_normal(&avg);
-		printf("rotate([0,180,0]) cylinder(r=15,h=10);\n");
+		printf("translate([%f,%f,%f])", 
+			-origin.p[0], -origin.p[1], -origin.p[2]);
+		printf("model();\n");
+		printf("translate([0,0,-20]) cylinder(r=15,h=20);\n");
 
 		//avg = v3_norm(avg);
 
+		printf("}\n");
 	}
 
-#if 0
-		avg_x.p[0] = avg_x.p[1] = avg_x.p[2] = 0;
-		avg_y.p[0] = avg_y.p[1] = avg_y.p[2] = 0;
-		avg_z.p[0] = avg_z.p[1] = avg_z.p[2] = 0;
-		
-		//printf("render() intersection() {\n");
-		printf("union() {\n");
-		make_faces(stl, v, thickness, -thickness, 0, 0, 0, 0);
-
-		printf("}\n");
-		//printf("}\n");
-
-		printf("union() {\n");
-		// slice away the outer bits
-		make_faces(stl, v, thickness, 0, -thickness, 0, 0, 0);
-		//make_faces(stl, v, thickness, inset_dist, hole_dist, hole_rad);
-		printf("}\n");
-
-
-		// add the screw holes
-		make_faces(stl, v, 0, 0, 0, hole_dist, hole_rad, thickness*3);
-		printf("} // difference\n");
-
-		printf("}\n");
-
-		refframe_t avg;
-		refframe_init(&avg, avg_x, avg_y, avg_z);
-
-		printf("translate([%d,0,12]) render() intersection() {\n", i*30);
-		printf("rotate([0,-90,0])");
-		print_multmatrix(&avg, 1);
-		printf("vertex_%d();\n", i);
-		printf("cube([100,100,24], center=true);\n");
-		printf("}\n");
-		
-
-		//break;
-		//if (i == 0) break; // only do one right now
-	}
-
-	//printf("translate([0,0,20]) sphere(r=2);\n");
-#endif
 	return 0;
 }
