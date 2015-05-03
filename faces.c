@@ -63,8 +63,8 @@ main(void)
 	stl_3d_t * const stl = stl_3d_parse(STDIN_FILENO);
 	if (!stl)
 		return EXIT_FAILURE;
-	const double inset_distance = 6;
-	const double hole_radius = 3.0/2;
+	const double inset_distance = 5;
+	const double hole_radius = 1.5;
 
 	int * const face_used = calloc(sizeof(*face_used), stl->num_face);
 
