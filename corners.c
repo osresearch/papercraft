@@ -261,7 +261,7 @@ main(
 	const double thickness = 3;
 	const double inset_dist = 5;
 	const double hole_dist = 5;
-	const double hole_rad = 1.25;
+	const double hole_rad = 1.5;
 
 	int * const face_used
 		= calloc(sizeof(*face_used), stl->num_face);

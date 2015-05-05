@@ -64,7 +64,7 @@ main(void)
 	if (!stl)
 		return EXIT_FAILURE;
 	const double inset_distance = 5;
-	const double hole_radius = 1.5;
+	const double hole_radius = 1.15;
 
 	int * const face_used = calloc(sizeof(*face_used), stl->num_face);
 
