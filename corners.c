@@ -17,11 +17,13 @@
 #include <math.h>
 #include <err.h>
 #include <assert.h>
+#include <getopt.h>
 #include "v3.h"
 #include "stl_3d.h"
 
+static FILE * output;
+static int verbose;
 
-static v3_t avg_x, avg_y, avg_z;
 
 static void
 print_multmatrix(
@@ -29,7 +31,7 @@ print_multmatrix(
 	const int transpose
 )
 {
-	printf("multmatrix(m=["
+	fprintf(output, "multmatrix(m=["
 		"[%f,%f,%f,0],"
 		"[%f,%f,%f,0],"
 		"[%f,%f,%f,0],"
@@ -50,7 +52,7 @@ print_multmatrix(
 static void
 print_normal(
 	const v3_t * normal,
-	int flip
+	int show_model
 )
 {
 	const float x = normal->p[0];
@@ -60,12 +62,12 @@ print_normal(
 	const double b = acos(z / length);
 	const double c = x == 0 ? sign(y)*90 : atan2(y,x);
 
-	if (flip)
+	if (!show_model)
 	{
-		printf("rotate([0,%f,0])", -b*180/M_PI);
-		printf("rotate([0,0,%f])", -c*180/M_PI);
+		fprintf(output, "rotate([0,%f,0])", -b*180/M_PI);
+		fprintf(output, "rotate([0,0,%f])", -c*180/M_PI);
 	} else {
-		printf("rotate([%f,%f,%f])\n", 0.0, b * 180 / M_PI, c * 180 / M_PI);
+		fprintf(output, "rotate([%f,%f,%f])\n", 0.0, b * 180 / M_PI, c * 180 / M_PI);
 	}
 }
 
@@ -74,7 +76,7 @@ static void
 find_normal(
 	const stl_3d_t * const stl,
 	const stl_vertex_t * const v,
-	const float inset_dist,
+	const float inset_distance,
 	v3_t * const avg
 )
 {
@@ -126,7 +128,7 @@ find_normal(
 			);
 
 			double x, y;
-			refframe_inset(&ref, inset_dist, &x, &y, p1, p2, p3);
+			refframe_inset(&ref, inset_distance, &x, &y, p1, p2, p3);
 
 			v3_t hole = refframe_project(&ref, (v3_t){{x,y,0}});
 			//hole = refframe_project(&ref, (v3_t){{10,0,0}});
@@ -139,91 +141,47 @@ find_normal(
 				hole.p[2]
 			);
 
-#if 0
-			printf("color(\"green\") translate([%f,%f,%f]) sphere(r=1);\n",
-				hole.p[0],
-				hole.p[1],
-				hole.p[2]
-			);
-
-			hole = refframe_project(&ref, (v3_t){10,0,0});
-			//v3_t hole = refframe_project(&ref, (v3_t){5,5,0});
-			printf("translate([%f,%f,%f]) sphere(r=1);\n",
-				hole.p[0],
-				hole.p[1],
-				hole.p[2]
-			);
-/*
-			hole = refframe_project(&ref, (v3_t){0,10,0});
-			//v3_t hole = refframe_project(&ref, (v3_t){5,5,0});
-			printf("%%translate([%f,%f,%f]) sphere(r=1);\n",
-				hole.p[0],
-				hole.p[1],
-				hole.p[2]
-			);
-*/
-#endif
-
 			//*avg = v3_add(*avg, ref.z);
 			*avg = v3_add(*avg, v3_norm(v3_sub(ref.origin, hole)));
 			//*avg = v3_add(*avg, (v3_sub(hole, ref.origin)));
 		}
 	}
 
-#if 0
-		// use the transpose of the rotation matrix,
-		// which will rotate from (x,y) to the correct
-		// orientation relative to this connector node.
-		print_multmatrix(&ref, 1);
-		printf("{\n");
-
-		// generate the polygon plane
-		if (thickness != 0)
-		{
-			printf("translate([0,0,%f]) linear_extrude(height=%f) polygon(points=[\n",
-				translate,
-				thickness
-			);
-
-			for(int k=0 ; k < vertex_count ; k++)
-			{
-				double x, y;
-				refframe_inset(&ref, inset_dist, &x, &y,
-					vertex_list[(k+0) % vertex_count]->p,
-					vertex_list[(k+1) % vertex_count]->p,
-					vertex_list[(k+2) % vertex_count]->p
-				);
-				printf("[%f,%f],", x, y);
-			}
-			printf("\n]);\n");
-		}
-
-		// generate the mounting holes/pins
-		if (hole_rad != 0)
-		{
-			for(int k=0 ; k < vertex_count ; k++)
-			{
-				double x, y;
-				refframe_inset(&ref, inset_dist+hole_dist, &x, &y,
-					vertex_list[(k+0) % vertex_count]->p,
-					vertex_list[(k+1) % vertex_count]->p,
-					vertex_list[(k+2) % vertex_count]->p
-				);
-				printf("translate([%f,%f,%f]) cylinder(r=%f,h=%f, $fs=1);\n",
-					x, y, -hole_height/2,
-					hole_rad,
-					hole_height
-				);
-			}
-		}
-
-		printf("}\n");
-	}
-#endif
-
 	free(face_used);
 	free(vertex_list);
 }
+
+
+static struct option long_options[] = 
+{
+	{ "verbose",	no_argument,	   0, 'v' },
+	{ "model",	no_argument,	   0, 'm' },
+	{ "inset",	required_argument, 0, 'i' },
+	{ "radius",     required_argument, 0, 'r' },
+	{ "input",      required_argument, 0, 'I' },
+	{ "output",	required_argument, 0, 'O' },
+	{ 0, 0, 0, 0 },
+};
+
+
+static void
+usage(
+	FILE * const out
+)
+{
+	fprintf(out,
+		"Usage: corners [options] -I stl-binary.stl > corners.scad\n"
+		"Options:\n"
+		" -v | --verbose      Enable verbosity\n"
+		" -i | --inset N      Inset mm\n"
+		" -r | --radius N     Hole radius mm\n"
+		" -I | --input file   Read binary STL from file\n"
+		" -O | --output file  Write SVG to file\n"
+		" -m | --model        Generate a 3D model instead of corners\n"
+		"\n"
+	);
+}
+
 
 
 int
@@ -232,36 +190,91 @@ main(
 	char ** argv
 )
 {
-	if (argc <= 1)
+	double inset_distance = 5;
+	double hole_radius = 1.15;
+	const char * input_file = NULL;
+	const char * output_file = NULL;
+	int show_model = 0;
+	int option_index = 0;
+
+	while (1)
 	{
-		fprintf(stderr, "Usage: corners file.stl > file-corners.scad\n");
-		return -1;
+		const int c = getopt_long(
+			argc,
+			argv,
+			"vmI:r:i:O:",
+			long_options,
+			&option_index
+		);
+		if (c == -1)
+			break;
+		switch(c)
+		{
+		case 'm': show_model = 1; break;
+		case 'v': verbose++; break;
+		case 'i': inset_distance = atof(optarg); break;
+		case 'r': hole_radius = atof(optarg); break;
+		case 'I': input_file = optarg; break;
+		case 'O': output_file = optarg; break;
+		case 'h': case '?':
+			usage(stdout);
+			return 0;
+		default:
+			usage(stderr);
+			return -1;
+		}
 	}
 
-	const char * const stl_name = argv[1];
-	int fd = open(stl_name, O_RDONLY);
-	if (fd < 0)
+	int input_fd;
+	if (!input_file)
 	{
-		perror(stl_name);
+		fprintf(stderr, "Input STL must be specified\n");
 		return -1;
+	} else {
+		input_fd = open(input_file, O_RDONLY);
+		if (input_fd < 0)
+		{
+			perror(input_file);
+			return -1;
+		}
 	}
 
-	stl_3d_t * const stl = stl_3d_parse(fd);
+	if (!output_file)
+	{
+		output_file = "stdout";
+		output = stdout;
+	} else {
+		output = fopen(output_file, "w");
+		if (!output)
+		{
+			perror(output_file);
+			return -1;
+		}
+	}
+
+	stl_3d_t * const stl = stl_3d_parse(input_fd);
 	if (!stl)
+	{
+		fprintf(stderr, "%s: Unable to parse STL\n", input_file);
 		return EXIT_FAILURE;
-	close(fd);
+	}
+	close(input_fd);
 
-	printf("module model() {\n"
+
+	if (verbose)
+		fprintf(stderr,
+			"%s: %d faces, %d vertex\n",
+			input_file,
+			stl->num_face,
+			stl->num_vertex
+		);
+
+	fprintf(output, "module model() {\n"
 		"render() difference() {\n"
 	 	"import(\"%s\");\n",
-		stl_name
+		input_file
 	);
 	//printf("%%model();\n");
-
-	const double thickness = 3;
-	const double inset_dist = 5;
-	const double hole_dist = 5;
-	const double hole_rad = 1.5;
 
 	int * const face_used
 		= calloc(sizeof(*face_used), stl->num_face);
@@ -297,14 +310,14 @@ main(
 		//ref.origin.p[1] = 0;
 		//ref.origin.p[2] = 0;
 
-		printf("translate([%f,%f,%f])",
+		fprintf(output, "translate([%f,%f,%f])",
 			f->vertex[0]->p.p[0],
 			f->vertex[0]->p.p[1],
 			f->vertex[0]->p.p[2]
 		);
 			
 		print_multmatrix(&ref, 0);
-		printf("{\n");
+		fprintf(output, "{\n");
 
 		// generate a bolt hole for each non-copolanar corner
 		for (int j = 0 ; j < vertex_count ; j++)
@@ -312,7 +325,7 @@ main(
 			double x, y;
 			refframe_inset(
 				&ref,
-				inset_dist,
+				inset_distance,
 				&x,
 				&y,
 				vertex_list[(j+0) % vertex_count]->p,
@@ -320,22 +333,21 @@ main(
 				vertex_list[(j+2) % vertex_count]->p
 			);
 
-			printf("translate([%f,%f,0]) cylinder(r=%f, h=%f, center=true);\n",
+			fprintf(output, "translate([%f,%f,0]) cylinder(r=%f, h=%f, center=true);\n",
 				x,
 				y,
-				hole_rad,
+				hole_radius,
 				10.0
 			);
 		}
 
-		printf("}\n");
+		fprintf(output, "}\n");
 	}
 
-	printf("}\n}\n");
+	fprintf(output, "}\n}\n");
 
-	const int flip = 1;
-	if (!flip)
-		printf("model();\n");
+	if (show_model)
+		fprintf(output, "model();\n");
 
 
 	// For each vertex, extract a small region around the corner
@@ -348,34 +360,34 @@ main(
 		const v3_t origin = v->p;
 
 		v3_t avg = {{ 0, 0, 0}};
-		find_normal(stl, v, inset_dist, &avg);
+		find_normal(stl, v, inset_distance, &avg);
 
-		if (flip)
+		if (!show_model)
 		{
-		printf("translate([%f,%f,20])", (i/div)*spacing, (i%div)*spacing);
-		printf("render() intersection()");
+			fprintf(output, "translate([%f,%f,20])", (i/div)*spacing, (i%div)*spacing);
+			fprintf(output, "render() intersection()");
 		}
 
-		printf("{\n");
+		fprintf(output, "{\n");
 
 		//printf("%%\n");
-		if (flip)
+		if (!show_model)
 		{
-			print_normal(&avg, 1);
-			printf("translate([%f,%f,%f])", 
+			print_normal(&avg, show_model);
+			fprintf(output, "translate([%f,%f,%f])", 
 				-origin.p[0], -origin.p[1], -origin.p[2]);
-			printf("model();\n");
-			printf("translate([0,0,-20]) cylinder(r=15,h=20);\n");
+			fprintf(output, "model();\n");
+			fprintf(output, "translate([0,0,-20]) cylinder(r=15,h=20);\n");
 		} else {
-			printf("translate([%f,%f,%f])", 
+			fprintf(output, "translate([%f,%f,%f])", 
 				origin.p[0], origin.p[1], origin.p[2]);
-			print_normal(&avg, 0);
-			printf("%%translate([0,0,-20]) cylinder(r=15,h=20);\n");
+			print_normal(&avg, show_model);
+			fprintf(output, "%%translate([0,0,-20]) cylinder(r=15,h=20);\n");
 		}
 
 		//avg = v3_norm(avg);
 
-		printf("}\n");
+		fprintf(output, "}\n");
 	}
 
 	return 0;
