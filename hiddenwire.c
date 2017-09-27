@@ -35,6 +35,17 @@ typedef struct
 } __attribute__((__packed__))
 stl_face_t;
 
+
+typedef struct _tri_t tri_t;
+struct _tri_t
+{
+	v3_t p[3];
+	float area;
+	float depth;
+	tri_t * next;
+	tri_t ** prev;
+};
+
 #if 0
 typedef struct face face_t;
 typedef struct poly poly_t;
@@ -714,6 +725,117 @@ stl2faces(
 }
 #endif
 
+/*
+s = 1/(2*Area)*(p0y*p2x - p0x*p2y + (p2y - p0y)*px + (p0x - p2x)*py);
+t = 1/(2*Area)*(p0x*p1y - p0y*p1x + (p0y - p1y)*px + (p1x - p0x)*py);
+where Area is the (signed) area of the triangle:
+
+Area = 0.5 *(-p1y*p2x + p0y*(-p1x + p2x) + p0x*(p1y - p2y) + p1x*p2y);
+Just evaluate s, t and 1-s-t. The point p is inside the triangle if and only if they are all positive.
+*/
+int inside_triangle(
+	const v3_t * const p,
+	const v3_t * const t0,
+	const v3_t * const t1,
+	const v3_t * const t2
+)
+{
+	const float p0x = t0->p[0];
+	const float p0y = t0->p[1];
+	const float p1x = t1->p[0];
+	const float p1y = t1->p[1];
+	const float p2x = t2->p[0];
+	const float p2y = t2->p[1];
+
+	const float px = p->p[0];
+	const float py = p->p[1];
+
+	const float s = p0y*p2x - p0x*p2y + (p2y - p0y)*px + (p0x - p2x)*py;
+	const float t = p0x*p1y - p0y*p1x + (p0y - p1y)*px + (p1x - p0x)*py;
+
+	if (s <= 0 || t <= 0)
+		return 0;
+
+	// maybe inside; check for sure
+	const float area = 0.5 *(-p1y*p2x + p0y*(-p1x + p2x) + p0x*(p1y - p2y) + p1x*p2y);
+	if (s + t <= 2 * area)
+		return 0;
+
+
+	// inside!
+	return 1;
+}
+
+
+tri_t *
+tri_new(
+	const v3_t * p
+)
+{
+	tri_t * const t = calloc(1, sizeof(*t));
+	if (!t)
+		return NULL;
+	for(int i = 0 ; i < 3  ; i++)
+		t->p[i] = p[i];
+
+	// precompute the area
+	const float p0x = t->p[0].p[0];
+	const float p0y = t->p[0].p[1];
+	const float p1x = t->p[1].p[0];
+	const float p1y = t->p[1].p[1];
+	const float p2x = t->p[2].p[0];
+	const float p2y = t->p[2].p[1];
+
+	t->area = 0.5 *(-p1y*p2x + p0y*(-p1x + p2x) + p0x*(p1y - p2y) + p1x*p2y);
+
+	// compute an average z-depth
+	// this isn't exactly right, but close enough
+	t->depth = (t->p[0].p[2] + t->p[1].p[2] + t->p[2].p[2]) / 3;
+
+	// should we pre-compute the normal?
+
+	return t;
+}
+
+
+// insert a triangle into our z-sorted list
+void
+tri_insert(
+	tri_t ** zlist,
+	tri_t * t
+)
+{
+	while(1)
+	{
+		tri_t * const iter = *zlist;
+		if (!iter)
+			break;
+
+		if(iter->depth > t->depth)
+			break;
+
+		zlist = &(iter->next);
+	}
+
+	// either we reached the end of the list,
+	// or we have found where our new triangle is sorted
+
+	t->next = *zlist;
+	*zlist = t;
+	if (t->next)
+		t->next->prev = &t->next;
+}
+
+
+void
+tri_delete(tri_t * t)
+{
+	if (t->next)
+		t->next->prev = t->prev;
+	*(t->prev) = t->next;
+	free(t);
+}
+
 
 int main(
 	int argc,
@@ -753,11 +875,12 @@ int main(
 	printf("<g transform=\"translate(%f %f)\">\n", off_x, off_y);
 
 	int rejected = 0;
+	tri_t * zlist = NULL;
 
+	// transform the stl in place by the camera projection
 	for (int i = 0 ; i < num_triangles ; i++)
 	{
 		const stl_face_t * const stl = &stl_faces[i];
-		int reject = 0;
 
 		v3_t s[3];
 
@@ -767,7 +890,7 @@ int main(
 		// reject this face if any of them are behind us
 		for(int j = 0 ; j < 3 ; j++)
 			if (s[j].p[2] <= 0)
-				reject = 1;
+				goto reject;
 
 		// do a back-face cull to determine if this triangle
 		// is not facing us. we have to determine the orientation
@@ -778,21 +901,33 @@ int main(
 		);
 
 		if (normal.p[2] <= 0)
-			reject = 1;
+			goto reject;
 
-		if (reject)
-		{
-			rejected++;
-			continue;
-		}
-		
-		// draw each of the three lines
-		for(int j = 0 ; j < 3 ; j++)
-			svg_line("#FF0000", s[j].p, s[(j+1) % 3].p, 0);
+		// it passes the first tests, so insert it into the list
+		tri_t * const tri = tri_new(s);
+		tri_insert(&zlist, tri);
+		continue;
+
+reject:
+		rejected++;
 	}
 
 	if (debug)
 		fprintf(stderr, "Rejected %d triangles\n", rejected);
+
+	// we now have a z-sorted list of triangles
+
+	for( tri_t * t = zlist ; t ; t = t->next )
+	{
+		// check to see if this triangle is entirely occluded
+		// by another triangle
+		
+		// draw each of the three lines
+		for(int j = 0 ; j < 3 ; j++)
+			svg_line("#FF0000", t->p[j].p, t->p[(j+1) % 3].p, 0);
+	}
+
+
 
 #if 0
 	face_t * const faces = stl2faces(stl_faces, num_triangles);
