@@ -6,7 +6,7 @@ typedef struct _camera_t camera_t;
 
 extern camera_t *
 camera_new(
-	float eye_z,
+	v3_t eye,
 	float phi,
 	float theta,
 	float psi
@@ -15,7 +15,7 @@ camera_new(
 extern void
 camera_setup(
 	camera_t * const c,
-	float eye_z,
+	v3_t eye,
 	float phi,
 	float theta,
 	float psi

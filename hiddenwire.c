@@ -17,8 +17,7 @@
 #define 	M_PI   3.1415926535897932384
 #endif
 
-static int debug = 0;
-static int draw_labels = 0;
+static int debug = 1;
 
 typedef struct
 {
@@ -111,7 +110,7 @@ svg_line(
 {
 	if (!dash)
 	{
-		printf("<line x1=\"%f\" y1=\"%f\" x2=\"%f\" y2=\"%f\" stroke=\"%s\" stroke-width=\"0.1px\"/>\n",
+		printf("<line x1=\"%f\" y1=\"%f\" x2=\"%f\" y2=\"%f\" stroke=\"%s\" stroke-width=\"0.5px\"/>\n",
 			p1[0],
 			p1[1],
 			p2[0],
@@ -716,10 +715,17 @@ stl2faces(
 #endif
 
 
-int main(void)
+int main(
+	int argc,
+	char ** argv
+)
 {
-	const size_t max_len = 1 << 20;
+	const size_t max_len = 32 << 20;
 	uint8_t * const buf = calloc(max_len, 1);
+
+	float phi = argc > 1 ? atof(argv[1]) * M_PI/180 : 0;
+	float theta = argc > 2 ? atof(argv[2]) * M_PI/180 : 0;
+	float psi = argc > 3 ? atof(argv[3]) * M_PI/180 : 0;
 
 	ssize_t rc = read(0, buf, max_len);
 	if (rc == -1)
@@ -729,38 +735,64 @@ int main(void)
 	const stl_face_t * const stl_faces = (const void*)(hdr+1);
 	const int num_triangles = hdr->num_triangles;
 
-	fprintf(stderr, "header: '%s'\n", hdr->header);
-	fprintf(stderr, "num: %d\n", num_triangles);
+	if(debug)
+	{
+		fprintf(stderr, "header: '%s'\n", hdr->header);
+		fprintf(stderr, "num: %d\n", num_triangles);
+	}
 
 
 	// looking at (0,0,0)
-	const camera_t * const cam = camera_new(400, 0, M_PI/2, M_PI);
+	v3_t eye = { { 0, 0, 400 } };
+	const camera_t * const cam = camera_new(eye, phi, theta, psi);
 
-	// translate each face into lines
 	printf("<svg xmlns=\"http://www.w3.org/2000/svg\">\n");
-	printf("<g>\n");
 
-	// convert the stl triangles into faces
+	float off_x = 500;
+	float off_y = 500;
+	printf("<g transform=\"translate(%f %f)\">\n", off_x, off_y);
+
+	int rejected = 0;
+
 	for (int i = 0 ; i < num_triangles ; i++)
 	{
 		const stl_face_t * const stl = &stl_faces[i];
+		int reject = 0;
 
 		v3_t s[3];
 
 		for(int j = 0 ; j < 3 ; j++)
 			camera_project(cam, &stl->p[j], &s[j]);
 
+		// reject this face if any of them are behind us
+		for(int j = 0 ; j < 3 ; j++)
+			if (s[j].p[2] <= 0)
+				reject = 1;
+
+		// do a back-face cull to determine if this triangle
+		// is not facing us. we have to determine the orientation
+		// from the winding of the new projection
+		v3_t normal = v3_cross(
+			v3_sub(s[1], s[0]),
+			v3_sub(s[2], s[1])
+		);
+
+		if (normal.p[2] <= 0)
+			reject = 1;
+
+		if (reject)
+		{
+			rejected++;
+			continue;
+		}
+		
 		// draw each of the three lines
 		for(int j = 0 ; j < 3 ; j++)
-		{
-			if (s[j].p[2] <= 0)
-				continue;
-			if (s[(j+1) % 3].p[2] <= 0)
-				continue;
 			svg_line("#FF0000", s[j].p, s[(j+1) % 3].p, 0);
-		}
-
 	}
+
+	if (debug)
+		fprintf(stderr, "Rejected %d triangles\n", rejected);
 
 #if 0
 	face_t * const faces = stl2faces(stl_faces, num_triangles);

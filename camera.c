@@ -12,14 +12,14 @@
 struct _camera_t
 {
 	float	zoom;
-	float	eye_z;
+	v3_t	eye;
 	float	r[3][3];
 };
 
 
 camera_t *
 camera_new(
-	float eye_z,
+	v3_t eye,
 	float phi,
 	float theta,
 	float psi
@@ -29,8 +29,8 @@ camera_new(
 	if (!c)
 		return NULL;
 
-	c->zoom = 1024;
-	camera_setup(c, eye_z, phi, theta, psi);
+	c->zoom = 4096;
+	camera_setup(c, eye, phi, theta, psi);
 	return c;
 }
 
@@ -38,7 +38,7 @@ camera_new(
 void
 camera_setup(
 	camera_t * const c,
-	float eye_z,
+	v3_t eye,
 	float phi,
 	float theta,
 	float psi
@@ -63,7 +63,7 @@ camera_setup(
 	c->r[2][1] =  sx * cy;
 	c->r[2][2] =  cx * cy;
 
-	c->eye_z = eye_z;
+	c->eye = eye;
  }
 
 
@@ -78,7 +78,7 @@ camera_project(
 	v3_t * const v_out
 )
 {
-	v3_t p = { .p = { 0, 0, c->eye_z } };
+	v3_t p = c->eye;
 
 	for (int i = 0 ; i < 3 ; i++)
 		for (int j = 0 ; j < 3 ; j++)
