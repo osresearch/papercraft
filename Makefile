@@ -10,12 +10,13 @@ CFLAGS = \
 LDLIBS = \
 	-lm \
 
-all: unfold wireframe corners faces
+all: unfold wireframe corners faces hiddenwire
 
 unfold: unfold.o
 wireframe: wireframe.o
 corners: corners.o stl_3d.o
 faces: faces.o stl_3d.o
+hiddenwire: hiddenwire.o camera.o
 
 clean:
 	$(RM) *.o
