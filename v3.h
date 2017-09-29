@@ -25,6 +25,23 @@ sign(
 }
 
 
+static inline float
+min(
+	const float a,
+	const float b
+)
+{
+	return a < b ? a : b;
+}
+
+static inline float
+max(
+	const float a,
+	const float b
+)
+{
+	return a > b ? a : b;
+}
 
 typedef struct
 {
