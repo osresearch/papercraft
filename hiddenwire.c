@@ -49,12 +49,9 @@ struct _tri_t
 };
 
 
-// line segment has to track its source so that it knows which to not
-// compare against in its occlusion checks.
 typedef struct _seg_t seg_t;
 struct _seg_t {
 	v3_t p[2];
-	v3_t src[2];
 	seg_t * next;
 };
 
@@ -242,15 +239,16 @@ static float poly_min[2], poly_max[2];
 static inline int
 v2_eq(
 	const float p0[],
-	const float p1[]
+	const float p1[],
+	const float eps
 )
 {
 	const float dx = p0[0] - p1[0];
 	const float dy = p0[1] - p1[1];
 
 	// are the points within epsilon of each other?
-	if (-EPS < dx && dx < EPS
-	&&  -EPS < dy && dy < EPS)
+	if (-eps < dx && dx < eps
+	&&  -eps < dy && dy < eps)
 		return 1;
 
 	// nope, not equal
@@ -299,7 +297,7 @@ get_line_intersection(
 
 	if (s > EPS && s < 1-EPS && t > EPS && t < 1-EPS)
 	{
-		if(0) fprintf(stderr, "collision: %f,%f->%f,%f %f,%f->%f,%f == %f,%f\n",
+		if(1) fprintf(stderr, "collision: %f,%f->%f,%f %f,%f->%f,%f == %f,%f\n",
 			p0_x, p0_y,
 			p1_x, p1_y,
 			p2_x, p2_y,
@@ -320,30 +318,96 @@ get_line_intersection(
 }
 
 
-int
-intersect(
-	const v3_t * const p00,
-	const v3_t * const p01,
-	const v3_t * const p10,
-	const v3_t * const p11,
-	float *px,
-	float *py
+/** Compute the points of intersection for two segments in 2d, and z points.
+ *
+ * This is a specialized ray intersection algorithm for the
+ * hidden wire-frame removal code that computes the intersection
+ * points for two rays (in 2D, "orthographic") and then computes
+ * the Z depth for the intersections along each of the segments.
+ *
+ * Returns -1 for non-intersecting, otherwise a ratio of how far
+ * along the intersection is on the l0.
+ */
+float
+hidden_intersect(
+	const v3_t * const p0,
+	const v3_t * const p1,
+	const v3_t * const p2,
+	const v3_t * const p3,
+	v3_t * const l0_int,
+	v3_t * const l1_int
 )
 {
-	// special case; if this is the same line, it does not intersect
-	if (v2_eq(p00->p, p10->p) && v2_eq(p01->p, p11->p))
-		return 0;
-	if (v2_eq(p01->p, p10->p) && v2_eq(p00->p, p11->p))
-		return 0;
+	const float p0_x = p0->p[0];
+	const float p0_y = p0->p[1];
+	const float p0_z = p0->p[2];
+	const float p1_x = p1->p[0];
+	const float p1_y = p1->p[1]; 
+	const float p1_z = p1->p[2];
+	const float p2_x = p2->p[0];
+	const float p2_y = p2->p[1];
+	const float p2_z = p2->p[2];
+	const float p3_x = p3->p[0];
+	const float p3_y = p3->p[1];
+	const float p3_z = p3->p[2];
 
-	return get_line_intersection(
-		p00->p[0], p00->p[1],
-		p01->p[0], p01->p[1],
-		p10->p[0], p10->p[1],
-		p11->p[0], p11->p[1],
-		px,
-		py
+	const float s1_x = p1_x - p0_x;
+	const float s1_y = p1_y - p0_y;
+	const float s2_x = p3_x - p2_x;
+	const float s2_y = p3_y - p2_y;
+
+	// compute r x s
+	const float d = -s2_x * s1_y + s1_x * s2_y;
+
+	// if they are close to parallel, then we do not need to check
+	// for intersection (we define that as "non-intersecting")
+	if (-EPS < d && d < EPS)
+		return -1;
+
+	// Compute how far along each line they would interesect
+	const float r0 = ( s2_x * (p0_y - p2_y) - s2_y * (p0_x - p2_x)) / d;
+	const float r1 = (-s1_y * (p0_x - p2_x) + s1_x * (p0_y - p2_y)) / d;
+
+	// if they are not within the ratio (0,1), then the intersecton occurs
+	// outside of the segments and is not of concern
+	if (r0 < 0 || r0 > 1)
+		return -1;
+	if (r1 < 0 || r1 > 1)
+		return -1;
+
+	// Collision detected with the segments
+if(0) fprintf(stderr, "collision: %.0f,%.0f,%.0f->%.0f,%.0f,%.0f %.0f,%.0f,%.0f->%.0f,%.0f,%.0f == %.3f,%.3f\n",
+		p0_x, p0_y, p0_z,
+		p1_x, p1_y, p1_z,
+		p2_x, p2_y, p2_z,
+		p3_x, p3_y, p2_z,
+		r0,
+		r1
 	);
+
+	const float ix = p0_x + (r0 * s1_x);
+	const float iy = p0_y + (r0 * s1_y);
+
+	// compute the z intercept for each on the two different coordinates
+	if(l0_int)
+	{
+		*l0_int = (v3_t){{
+			ix,
+			iy,
+			p0_z + r0 * (p1_z - p0_z)
+		}};
+	}
+
+	if(l1_int)
+	{
+		*l1_int = (v3_t){{
+			ix,
+			iy,
+			p2_z + r1 * (p3_z - p2_z)
+		}};
+	}
+
+	return r0;
 }
 
 
@@ -924,12 +988,77 @@ seg_new(
 		return NULL;
 	s->p[0] = p0;
 	s->p[1] = p1;
-	s->src[0] = p0;
-	s->src[1] = p1;
 	s->next = NULL;
 
 	return s;
 }
+
+
+void
+seg_print(
+	const seg_t * const s
+)
+{
+	fprintf(stderr, "%.0f,%.0f -> %.0f,%.0f\n",
+		s->p[0].p[0],
+		s->p[0].p[1],
+		s->p[1].p[0],
+		s->p[1].p[1]
+	);
+}
+
+void
+tri_print(
+	const tri_t * const t
+)
+{
+	fprintf(stderr, "%.0f,%.0f,%.0f %.0f,%.0f,%.0f %.0f,%.0f,%.0f\n",
+		t->p[0].p[0],
+		t->p[0].p[1],
+		t->p[0].p[2],
+		t->p[1].p[0],
+		t->p[1].p[1],
+		t->p[1].p[2],
+		t->p[2].p[0],
+		t->p[2].p[1],
+		t->p[2].p[2]
+	);
+}
+
+/** Find the Z point of a given xy point along the segment from p0 to p1.
+ *
+ * Returns -1 if there is no known Z point.
+ */
+float
+find_z(
+	const v3_t * const p0,
+	const v3_t * const p1,
+	const float x,
+	const float y
+)
+{
+	const float dx = p1->p[0] - p0->p[0];
+	const float dy = p1->p[1] - p0->p[1];
+	const float dz = p1->p[2] - p0->p[2];
+
+	// find the z value of the intersection point
+	// on the segment. we don't care about the triangle
+	float ratio = 0;
+	if (dx != 0)
+	{
+		ratio = (x - p0->p[0]) / dx;
+	} else
+	if (dy != 0)
+	{
+		ratio = (y - p0->p[1]) / dy;
+	} else {
+		fprintf(stderr, "uh, dx and dy both zero?\n");
+		return -1;
+	}
+
+	return p0->p[2] + dz * ratio;
+}
+
 
 
 /*
@@ -967,22 +1096,41 @@ tri_seg_intersect(
 	seg_t ** slist_visible
 )
 {
-	const float p0x = s->p[0].p[0];
-	const float p0y = s->p[0].p[1];
 	const float p0z = s->p[0].p[2];
-	const float p1x = s->p[1].p[0];
-	const float p1y = s->p[1].p[1];
 	const float p1z = s->p[1].p[2];
+	const float seg_max_z = max(p0z, p1z);
 
 	for( const tri_t * t = zlist ; t ; t = t->next )
 	{
 		// if the segment is closer than the triangle,
 		// then we no longer have to check any further into
 		// the zlist (it is sorted by depth).
-		if (p0z < t->min[2] && p1z < t->min[2])
+		if (seg_max_z <= t->min[2])
 			break;
 
+
 #if 0
+		// make sure that we're not comparing to our own triangle
+		// or one that shares an edge with us (which might be in
+		// a different order)
+		if (v2_eq(s->src[0].p, t->p[0].p, 0.1)
+		&&  v2_eq(s->src[1].p, t->p[1].p, 0.1))
+			continue;
+		if (v2_eq(s->src[0].p, t->p[1].p, 0.1)
+		&&  v2_eq(s->src[1].p, t->p[2].p, 0.1))
+			continue;
+		if (v2_eq(s->src[0].p, t->p[2].p, 0.1)
+		&&  v2_eq(s->src[1].p, t->p[0].p, 0.1))
+			continue;
+		if (v2_eq(s->src[0].p, t->p[1].p, 0.1)
+		&&  v2_eq(s->src[1].p, t->p[0].p, 0.1))
+			continue;
+		if (v2_eq(s->src[0].p, t->p[2].p, 0.1)
+		&&  v2_eq(s->src[1].p, t->p[1].p, 0.1))
+			continue;
+		if (v2_eq(s->src[0].p, t->p[0].p, 0.1)
+		&&  v2_eq(s->src[1].p, t->p[2].p, 0.1))
+			continue;
 		// do a quick test of does this segment even comes
 		// close to this triangle
 		if (p0x < t->min[0] && p1x < t->min[0]
@@ -1012,27 +1160,49 @@ tri_seg_intersect(
 
 		// if both are inside we discard this segment
 		if (inside0 && inside1)
+		{
+			//svg_line("#0000FF", s->p[0].p, s->p[1].p, 0);
+			//svg_line("#00FF00", t->p[0].p, t->p[1].p, 0);
+			//svg_line("#00FF00", t->p[1].p, t->p[2].p, 0);
+			//svg_line("#00FF00", t->p[2].p, t->p[0].p, 0);
+fprintf(stderr, "BOTH INSIDE\n");
+tri_print(t);
+seg_print(s);
 			return;
+		}
 
 		// split the segment for each intersection with the
 		// triangle segments and add it to the work queue.
 		int intersections = 0;
-		v3_t ix[3] = {};
- 		const float max_z = max(s->p[0].p[2], s->p[1].p[2]);
+		v3_t is[3] = {}; // 3d point of segment intercept
+		v3_t it[3] = {}; // 3d point of triangle intercept
 
 		for(int j = 0 ; j < 3 ; j++)
 		{
-			ix[j].p[2] = max_z;
-			int rc = intersect(
+			float ratio = hidden_intersect(
 				&s->p[0], &s->p[1],
 				&t->p[j], &t->p[(j+1)%3],
-				&ix[intersections].p[0], &ix[intersections].p[1]
+				&is[intersections],
+				&it[intersections]
 			);
 
-			if (!rc)
+			if (ratio < 0)
 				continue;
 
-			intersections++;
+			// deal with corner cases where the segment
+			// exactly lines up with the triangle edge
+			// we do not treat this as an intersection
+			if (-EPS < ratio && ratio < EPS)
+			{
+				inside0 = 0;
+			} else
+			if (1-EPS < ratio && ratio < 1+EPS)
+			{
+				inside1 = 0;
+			} else {
+				// this is a real intersection
+				intersections++;
+			}
 		}
 
 		// if none of them intersect, we keep looking
@@ -1051,31 +1221,46 @@ fprintf(stderr, "split %d %d inter %d\n", inside0 , inside1, intersections);
 			if (inside0 || inside1)
 			{
 				fprintf(stderr, "uh, inside but two intersections?\n");
-				return;
+				//return;
 			}
 
+			// if the segment intersection is closer than the triangle,
+			// then we do nothing. degenerate cases are not handled
+			if (is[0].p[2] <= it[0].p[2]
+			||  is[1].p[2] <= it[1].p[2])
+			{
+fprintf(stderr, "ignoring collision since z %f < %f || %f < %f\n",
+			is[0].p[2], it[0].p[2],
+			is[1].p[2], it[1].p[2]);
+		
+				continue;
+			}
+
+			// segment is behind the triangle,
 			// we have to create a new segment
 			// and shorten the existing segment
 			// find the two intersections that we have
 			// update the src field
 			
 
-			fprintf(stderr, "two intersections\n");
-			const float d0 = v2_dist(s->p[0].p, ix[0].p);
-			const float d1 = v2_dist(s->p[1].p, ix[0].p);
+			const float d0 = v3_len(&s->p[0], &is[0]);
+			const float d1 = v3_len(&s->p[0], &is[1]);
+			fprintf(stderr, "two intersections %.0f %.0f\n", d0, d1);
 			seg_t * news;
 			if (d0 < d1)
 			{
 				// split from p0 to ix0
-				news = seg_new(s->p[0], ix[0]);
-				news->src[1] = s->p[1];
-				s->p[1] = ix[1];
+				news = seg_new(s->p[0], is[0]);
+				s->p[0] = is[1];
 			} else {
 				// split from p0 to ix1
-				news = seg_new(s->p[0], ix[1]);
-				news->src[1] = s->p[1];
-				s->p[1] = ix[0];
+				news = seg_new(s->p[0], is[1]);
+				s->p[0] = is[0];
 			}
+fprintf(stderr, "old segment:" );
+seg_print(s);
+fprintf(stderr, "new segment:" );
+seg_print(news);
 
 			// recursively start splitting the new segment
 			// starting at our current z-depth
@@ -1087,36 +1272,47 @@ fprintf(stderr, "split %d %d inter %d\n", inside0 , inside1, intersections);
 
 		if (intersections == 1)
 		{
-fprintf(stderr, "split %d %d\n", inside0, inside1);
+			// if there is an intersection, but the segment intercept
+			// is close than the triangle intercept, then no problem.
+			// we do not bother with degenerate cases of intersecting
+			// triangles
+			if (is[0].p[2] <= it[0].p[2])
+				continue;
+
+			// segment is behind the triangle, so it needs to be
+			// cut into pieces
 			if (inside0)
 			{
 				// shorten it on the 0 side
-				s->p[0] = ix[0];
+				s->p[0] = is[0];
+				continue;
 			} else
 			if (inside1)
 			{
 				// shorten it on the 1 side
-				s->p[1] = ix[0];
+				s->p[1] = is[0];
+				continue;
+			} else
+			if (v2_eq(s->p[0].p, is[0].p, 0.1))
+			{
+				// the 0 side is on the triangle, don't bother
+				continue;
+			} else
+			if (v2_eq(s->p[1].p, is[0].p, 0.1))
+			{
+				// the 1 side is on the triangle, don't bother
+				continue;
 			} else {
-				fprintf(stderr, "uh, both outside but one intersection?\n");
-				return;
+				fprintf(stderr, "uh, both outside but one intersection?  %.3f,%.3f\n",
+	is[0].p[0],
+	is[0].p[1]
+);
+seg_print(s);
+tri_print(t);
+				//svg_line("#00FF00", s->p[0].p, s->p[1].p, 0);
+				continue;
 			}
 		}
-			
-
-if(0) fprintf(stderr, "check: %.0f,%.0f -> %.0f,%.0f  %.0f,%.0f %.0f,%.0f %.0f,%.0f\n",
-	s->p[0].p[0],
-	s->p[0].p[1],
-	s->p[1].p[0],
-	s->p[1].p[1],
-	t->p[0].p[0],
-	t->p[0].p[1],
-	t->p[1].p[0],
-	t->p[1].p[1],
-	t->p[2].p[0],
-	t->p[2].p[1]
-);
-		//return;
 	}
 
 	// if we've reached here the segment is visible
@@ -1141,6 +1337,13 @@ int main(
 	char ** argv
 )
 {
+	v3_t p0 = {{ 0, 0, 0 }};
+	v3_t p1 = {{ 100, 100, 100 }};
+	v3_t p2 = {{ 200, -100, 0 }};
+	v3_t p3 = {{ 0, 100, 200 }};
+	v3_t is, it;
+	hidden_intersect(&p0, &p1, &p2, &p3, &is, &it);
+
 	const size_t max_len = 32 << 20;
 	uint8_t * const buf = calloc(max_len, 1);
 
@@ -1178,6 +1381,8 @@ int main(
 	seg_t * slist = NULL;
 	seg_t * slist_visible = NULL;
 
+	int retained = 0;
+
 	// transform the stl by the camera projection and generate
 	// a z-sorted list of triangles
 	for (int i = 0 ; i < num_triangles ; i++)
@@ -1212,6 +1417,10 @@ int main(
 			slist = s;
 		}
 
+		retained++;
+		if( retained > 3)
+			break;
+
 		continue;
 
 reject:
@@ -1220,19 +1429,29 @@ reject:
 	}
 
 	if (debug)
-		fprintf(stderr, "Rejected %d triangles\n", rejected);
+		fprintf(stderr, "Retained %d, rejected %d triangles\n", retained, rejected);
+
+	for( const tri_t * t = zlist ; t ; t = t->next )
+		tri_print(t);
 
 	// we now have a z-sorted list of triangles
 	rejected = 0;
 
-	// work on each segment, intersecting it with all of the triangles
-	while(slist)
+	if(1)
 	{
-		seg_t * s = slist;
-		slist = s->next;
+		// work on each segment, intersecting it with all of the triangles
+		while(slist)
+		{
+			seg_t * s = slist;
+			slist = s->next;
 
-		tri_seg_intersect(zlist, s, &slist_visible);
+			tri_seg_intersect(zlist, s, &slist_visible);
 
+		}
+	} else {
+		// don't do any intersection tests
+		slist_visible = slist;
+		slist = NULL;
 	}
 
 	// display all of the visible segments
