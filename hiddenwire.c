@@ -646,6 +646,7 @@ int main(
 	float phi = argc > 1 ? atof(argv[1]) * M_PI/180 : 0;
 	float theta = argc > 2 ? atof(argv[2]) * M_PI/180 : 0;
 	float psi = argc > 3 ? atof(argv[3]) * M_PI/180 : 0;
+	int filter_level = argc > 4 ? atoi(argv[4]) : 4;
 
 	ssize_t rc = read(0, buf, max_len);
 	if (rc == -1)
@@ -655,9 +656,9 @@ int main(
 	const stl_face_t * const stl_faces = (const void*)(hdr+1);
 	const int num_triangles = hdr->num_triangles;
 
-	int backface = 1;
-	int coplanar = 1;
-	int hidden = 1;
+	int backface = filter_level > 0;
+	int hidden = filter_level > 1;
+	int coplanar = filter_level > 2;
 	float coplanar_eps = 0.001;
 
 	if(debug)
