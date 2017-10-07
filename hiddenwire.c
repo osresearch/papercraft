@@ -41,7 +41,6 @@ struct _tri_t
 {
 	v3_t p[3]; // camera space
 	v3_t normal; // camera space
-	v3_t p_xyz[3]; // original xyz space
 	v3_t normal_xyz; // original xyz space
 	float min[3]; // camera space
 	float max[3]; // camera space
@@ -205,77 +204,6 @@ if(0) fprintf(stderr, "collision: %.0f,%.0f,%.0f->%.0f,%.0f,%.0f %.0f,%.0f,%.0f-
 
 
 
-int
-tri_inside(
-	const tri_t * const t,
-	const v3_t * const p,
-	v3_t * const bary
-)
-{
-#if 1
-	const float p0x = t->p[0].p[0];
-	const float p0y = t->p[0].p[1];
-	const float p1x = t->p[1].p[0];
-	const float p1y = t->p[1].p[1];
-	const float p2x = t->p[2].p[0];
-	const float p2y = t->p[2].p[1];
-
-	const float px = p->p[0];
-	const float py = p->p[1];
-
-	// compute the barycentric coordinates of p in triangle t
-	const float a =	(p1y - p2y)*(p0x - p2x) + (p2x - p1x)*(p0y - p2y);
-//fprintf(stderr, "a=%f\n", a);
-	if (a < EPS)
-	{
-		// triangle is too small or has negative area
-		return 0;
-	}
-
-	const float alpha = ((p1y - p2y)*(px - p2x) + (p2x - p1x)*(py - p2y));
-	const float beta = ((p2y - p0y)*(px - p2x) + (p0x - p2x)*(py - p2y));
-	const float gamma = a - alpha - beta;
-
-	if (bary)
-		*bary = (v3_t) {{ alpha, beta, gamma }};
-
-if(0) fprintf(stderr, "a=%f b=%f g=%f\n", alpha, beta, gamma);
-	if (alpha < 0 || beta < 0 || gamma < 0)
-		return 0;
-
-	// inside!
-if(0) fprintf(stderr, "%p: %f,%f inside %f,%f %f,%f %f,%f\n",
-	t,
-	px, py,
-	p0x, p0y,
-	p1x, p1y,
-	p2x, p2y
-);
-
-#else
-
-	const v3_t v1 = v3_sub(t->p[2], t->p[0]);
-	const v3_t v2 = v3_sub(t->p[1], t->p[0]);
-	const v3_t v = v3_sub(*p, t->p[0]);
-
-	const float d = det(v1,v2);
-	const float a = (det(*p,v2) - det(t->p[0], v2)) / +d;
-	const float b = (det(*p,v1) - det(t->p[0], v1)) / -d;
-	//const float a = +det(v,v2) / d;
-	//const float b = -det(v,v1) / d;
-
-	fprintf(stderr, "a=%f b=%f d=%f\n", a, b, d);
-	if (a < 0 || b < 0)
-		return 0;
-	if (a + b > 1)
-		return 0;
-
-#endif
-
-	return 1;
-}
-
-
 
 tri_t *
 tri_new(
@@ -287,10 +215,7 @@ tri_new(
 	if (!t)
 		return NULL;
 	for(int i = 0 ; i < 3  ; i++)
-	{
 		t->p[i] = p_cam[i];
-		t->p_xyz[i] = p_xyz[i];
-	}
 
 	// precompute the normals
 	t->normal = v3_norm(v3_cross(
@@ -298,8 +223,8 @@ tri_new(
 		v3_sub(t->p[2], t->p[1])
 	));
 	t->normal_xyz = v3_norm(v3_cross(
-		v3_sub(t->p_xyz[1], t->p_xyz[0]),
-		v3_sub(t->p_xyz[2], t->p_xyz[1])
+		v3_sub(p_xyz[1], p_xyz[0]),
+		v3_sub(p_xyz[2], p_xyz[1])
 	));
 
 
@@ -461,40 +386,6 @@ tri_coplanar(
 	}
 }
 
-/** Find the Z point of a given xy point along the segment from p0 to p1.
- *
- * Returns -1 if there is no known Z point.
- */
-float
-find_z(
-	const v3_t * const p0,
-	const v3_t * const p1,
-	const float x,
-	const float y
-)
-{
-	const float dx = p1->p[0] - p0->p[0];
-	const float dy = p1->p[1] - p0->p[1];
-	const float dz = p1->p[2] - p0->p[2];
-
-	// find the z value of the intersection point
-	// on the segment. we don't care about the triangle
-	float ratio = 0;
-	if (dx != 0)
-	{
-		ratio = (x - p0->p[0]) / dx;
-	} else
-	if (dy != 0)
-	{
-		ratio = (y - p0->p[1]) / dy;
-	} else {
-		fprintf(stderr, "uh, dx and dy both zero?\n");
-		return -1;
-	}
-
-	return p0->p[2] + dz * ratio;
-}
-
 
 /*
  * Find the Z point of an XY coordinate in a triangle.
@@ -505,10 +396,11 @@ find_z(
  * p = a * t1 + b * t2
  * which is two equations with two unknowns
  */
-float
+int
 tri_find_z(
 	const tri_t * const t,
-	const v3_t * const p
+	const v3_t * const p,
+	float * const zout
 )
 {
 	const float t1x = t->p[1].p[0] - t->p[0].p[0];
@@ -525,7 +417,10 @@ tri_find_z(
 
 	const float z = t->p[0].p[2] + a * t1z + b * t2z;
 
-	return z;
+	if (zout)
+		*zout = z;
+
+	return 0 <= a && 0 <= b && a + b <= 1;
 }
 
 
@@ -615,20 +510,19 @@ fprintf(stderr, "%d: processing segment ", recursive++); seg_print(s);
 			continue;
 #endif
 
-		v3_t bary[2] = {};
-		int inside0 = tri_inside(t, &s->p[0], &bary[0]);
-		int inside1 = tri_inside(t, &s->p[1], &bary[1]);
+		float z0, z1;
+		int inside0 = tri_find_z(t, &s->p[0], &z0);
+		int inside1 = tri_find_z(t, &s->p[1], &z1);
 
-		// if both are inside and the triangle is behind
-		// this segment, then we discard this segment
+		// if both are inside but the segment is infront of the
+		// triangle, then we retain the segment.
+		// otherwies we discard the segment
 		if (inside0 && inside1)
 		{
-			float p0_tri_z = tri_find_z(t, &s->p[0]);
-			if (s->p[0].p[2] <= p0_tri_z)
+			if (s->p[0].p[2] <= z0)
 				continue;
-fprintf(stderr, "z=%.3f ", p0_tri_z);
-seg_print(s);
-tri_print(t);
+			if (s->p[1].p[2] <= z1)
+				continue;
 
 			//svg_line("#0000FF", s->p[0].p, s->p[1].p, 0);
 			//svg_line("#00FF00", t->p[0].p, t->p[1].p, 0);
@@ -638,8 +532,6 @@ if(0) {
 fprintf(stderr, "BOTH INSIDE\n");
 tri_print(t);
 seg_print(s);
-fprintf(stderr, "bary0 %f,%f,%f\n", bary[0].p[0], bary[0].p[1], bary[0].p[2]);
-fprintf(stderr, "bary1 %f,%f,%f\n", bary[1].p[0], bary[1].p[1], bary[1].p[2]);
 }
 			//svg_line("#00FF00", s->p[0].p, s->p[1].p, 10);
 			//svg_line("#0000FF", t->p[0].p, t->p[1].p, 2);
@@ -708,25 +600,7 @@ svg_line("#00FF00", s->p[0].p, s->p[1].p, 10);
 
 		if (intersections == 2)
 		{
-			// if the segment intersection is closer than the triangle,
-			// then we do nothing. degenerate cases are not handled
-			if (is[0].p[2] <= it[0].p[2]
-			||  is[1].p[2] <= it[1].p[2])
-			{
-/*
-fprintf(stderr, "ignoring collision since z %f < %f || %f < %f\n",
-			is[0].p[2], it[0].p[2],
-			is[1].p[2], it[1].p[2]);
-*/
-		
-				continue;
-			}
-
-			// segment is behind the triangle,
-			// we have to create a new segment
-			// and shorten the existing segment
-			// find the two intersections that we have
-			// update the src field
+			// figure out how far it is to each of the intersections
 			const float d00 = v3_len(&s->p[0], &is[0]);
 			const float d01 = v3_len(&s->p[0], &is[1]);
 			const float d10 = v3_len(&s->p[1], &is[0]);
@@ -746,6 +620,23 @@ fprintf(stderr, "ignoring collision since z %f < %f || %f < %f\n",
 				recursive--;
 				return;
 			}
+
+			// if the segment intersection is closer than the triangle,
+			// then we do nothing. degenerate cases are not handled
+			if (d00 <= d01
+			&& is[0].p[2] <= it[0].p[2]
+			&& is[1].p[2] <= it[1].p[2])
+				continue;
+			if (d00 > d01
+			&& is[1].p[2] <= it[0].p[2]
+			&& is[0].p[2] <= it[1].p[2])
+				continue;
+
+			// segment is behind the triangle,
+			// we have to create a new segment
+			// and shorten the existing segment
+			// find the two intersections that we have
+			// update the src field
 
 			// we need to create a new segment
 			seg_t * news;
@@ -785,8 +676,12 @@ seg_print(news);
 			// is closer than the triangle intercept, then no problem.
 			// we do not bother with degenerate cases of intersecting
 			// triangles
-			if (is[0].p[2] <= it[0].p[2])
+			if (is[0].p[2] <= it[0].p[2]
+			&&  is[1].p[2] <= it[0].p[2])
+			{
+				//svg_line("#00FF00", s->p[0].p, s->p[1].p, 10);
 				continue;
+			}
 
 /*
 			// due to floating point issues, one of these might
@@ -827,6 +722,7 @@ seg_print(news);
 				news->src[1] = s->src[1];
 				s->p[0] = is[0];
 				tri_seg_intersect(zlist->next, news, slist_visible);
+				//svg_line("#00FF00", s->p[0].p, s->p[1].p, 10);
 //fprintf(stderr, "%d -----\n", --recursive);
 
 				// continue splitting our current segment
