@@ -90,7 +90,7 @@ camera_project(
 	// is this rotating?
 	float px = p.p[1] / p.p[2];
 	float py = p.p[0] / p.p[2];
-	float pz = p.p[2];
+	float pz = p.p[2] / c->zoom;
 
 	// return it to the caller
 	v_out->p[0] = px * c->zoom;

@@ -835,6 +835,7 @@ if(0) fprintf(stderr, "%p: %f,%f inside %f,%f %f,%f %f,%f\n",
 }
 
 
+
 tri_t *
 tri_new(
 	const v3_t * p
@@ -844,14 +845,13 @@ tri_new(
 	if (!t)
 		return NULL;
 	for(int i = 0 ; i < 3  ; i++)
-		for(int j = 0 ; j < 3 ; j++)
-			t->p[i].p[j] = p[i].p[j];
+		t->p[i] = p[i];
 
 	// precompute the normal
-	t->normal = v3_cross(
+	t->normal = v3_norm(v3_cross(
 		v3_sub(t->p[1], t->p[0]),
 		v3_sub(t->p[2], t->p[1])
-	);
+	));
 
 
 	// compute the bounding box for the triangle
@@ -961,6 +961,52 @@ tri_print(
 		t->p[2].p[1],
 		t->p[2].p[2]
 	);
+}
+
+
+/* Check if two triangles are coplanar and share an edge.
+ *
+ * Returns -1 if not coplanar, 0-2 for the edge in t0 that they share.
+ */
+int
+tri_coplanar(
+	const tri_t * const t0,
+	const tri_t * const t1,
+	const float coplanar_eps
+)
+{
+	// the two normals must be parallel-enough
+	const float angle = v3_mag(v3_sub(t0->normal, t1->normal));
+	if (angle < -coplanar_eps || +coplanar_eps < angle)
+		return -1;
+	
+	// find if there are two points shared
+	unsigned matches = 0;
+	for(int i = 0 ; i < 3 ; i++)
+	{
+		for(int j = 0 ; j < 3 ; j++)
+		{
+			if (!v3_eq(&t0->p[i], &t1->p[j]))
+				continue;
+			matches |= 1 << i;
+			break;
+		}
+	}
+
+	switch(matches)
+	{
+	case 0x3: return 0;
+	case 0x6: return 1;
+	case 0x5: return 2;
+	case 0x7:
+		fprintf(stderr, "uh, three points match?\n");
+		tri_print(t0);
+		tri_print(t1);
+		return -1;
+	default:
+		// no shared edge
+		return -1;
+	}
 }
 
 /** Find the Z point of a given xy point along the segment from p0 to p1.
@@ -1337,6 +1383,11 @@ int main(
 	const stl_face_t * const stl_faces = (const void*)(hdr+1);
 	const int num_triangles = hdr->num_triangles;
 
+	int backface = 1;
+	int coplanar = 1;
+	int hidden = 1;
+	float coplanar_eps = 0.01;
+
 	if(debug)
 	{
 		fprintf(stderr, "header: '%s'\n", hdr->header);
@@ -1351,7 +1402,7 @@ int main(
 	printf("<svg xmlns=\"http://www.w3.org/2000/svg\">\n");
 
 	float off_x = 500;
-	float off_y = 1200;
+	float off_y = 500;
 	printf("<g transform=\"translate(%f %f)\">\n", off_x, off_y);
 
 	int rejected = 0;
@@ -1372,6 +1423,14 @@ int main(
 		for(int j = 0 ; j < 3 ; j++)
 			camera_project(cam, &stl->p[j], &s[j]);
 
+fprintf(stderr, "%.3f,%.3f,%.3f -> %.0f,%.0f\n",
+	stl->p[0].p[0],
+	stl->p[0].p[1],
+	stl->p[0].p[2],
+	s[0].p[0],
+	s[0].p[1]
+);
+
 		tri_t * const tri = tri_new(s);
 
 		// reject this face if any of the vertices are behind us
@@ -1381,7 +1440,7 @@ int main(
 		// do a back-face cull to determine if this triangle
 		// is not facing us. we have to determine the orientation
 		// from the winding of the new projection
-		if (tri->normal.p[2] <= 0)
+		if (backface && tri->normal.p[2] <= 0)
 			goto reject;
 
 		retained++;
@@ -1389,15 +1448,6 @@ int main(
 		// it passes the first tests, so insert the triangle
 		// into the list and the three line segments
 		tri_insert(&zlist, tri);
-
-		for(int j = 0 ; j < 3 ; j++)
-		{
-			seg_t * s = seg_new(tri->p[j], tri->p[(j+1) % 3]);
-			s->next = slist;
-			slist = s;
-		}
-
-
 		continue;
 
 reject:
@@ -1408,10 +1458,48 @@ reject:
 	if (debug)
 		fprintf(stderr, "Retained %d, rejected %d triangles\n", retained, rejected);
 
+
+	// generate a list of segments, dropping any coplanar ones
+	rejected = 0;
+	for(tri_t * t = zlist ; t ; t = t->next)
+	{
+		unsigned matches = 0;
+
+		if(coplanar)
+		for(tri_t * t2 = zlist ; t2 ; t2 = t2->next)
+		{
+			if (t == t2)
+				continue;
+
+			const int edge = tri_coplanar(t, t2, coplanar_eps);
+			if (edge < 0)
+				continue;
+			matches |= 1 << edge;
+		}
+		
+		for(int j = 0 ; j < 3 ; j++)
+		{
+			// drop any that are coplanar
+			if (matches & (1 << j))
+			{
+				rejected++;
+				continue;
+			}
+
+			seg_t * s = seg_new(t->p[j], t->p[(j+1) % 3]);
+			s->next = slist;
+			slist = s;
+		}
+	}
+
+	if (debug)
+		fprintf(stderr, "Rejected %d coplanar segments\n", rejected);
+
+
 	// we now have a z-sorted list of triangles
 	rejected = 0;
 
-	if(1)
+	if(hidden)
 	{
 		// work on each segment, intersecting it with all of the triangles
 		while(slist)
@@ -1420,7 +1508,6 @@ reject:
 			slist = s->next;
 
 			tri_seg_intersect(zlist, s, &slist_visible);
-
 		}
 	} else {
 		// don't do any intersection tests
