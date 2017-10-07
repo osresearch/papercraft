@@ -39,10 +39,12 @@ stl_face_t;
 typedef struct _tri_t tri_t;
 struct _tri_t
 {
-	v3_t p[3];
-	v3_t normal;
-	float min[3];
-	float max[3];
+	v3_t p[3]; // camera space
+	v3_t normal; // camera space
+	v3_t p_xyz[3]; // original xyz space
+	v3_t normal_xyz; // original xyz space
+	float min[3]; // camera space
+	float max[3]; // camera space
 	tri_t * next;
 	tri_t ** prev;
 };
@@ -838,23 +840,31 @@ if(0) fprintf(stderr, "%p: %f,%f inside %f,%f %f,%f %f,%f\n",
 
 tri_t *
 tri_new(
-	const v3_t * p
+	const v3_t * p_cam,
+	const v3_t * p_xyz
 )
 {
 	tri_t * const t = calloc(1, sizeof(*t));
 	if (!t)
 		return NULL;
 	for(int i = 0 ; i < 3  ; i++)
-		t->p[i] = p[i];
+	{
+		t->p[i] = p_cam[i];
+		t->p_xyz[i] = p_xyz[i];
+	}
 
-	// precompute the normal
+	// precompute the normals
 	t->normal = v3_norm(v3_cross(
 		v3_sub(t->p[1], t->p[0]),
 		v3_sub(t->p[2], t->p[1])
 	));
+	t->normal_xyz = v3_norm(v3_cross(
+		v3_sub(t->p_xyz[1], t->p_xyz[0]),
+		v3_sub(t->p_xyz[2], t->p_xyz[1])
+	));
 
 
-	// compute the bounding box for the triangle
+	// compute the bounding box for the triangle in camera space
 	for(int j = 0 ; j < 3 ; j++)
 	{
 		t->min[j] = min(min(t->p[0].p[j], t->p[1].p[j]), t->p[2].p[j]);
@@ -950,7 +960,7 @@ tri_print(
 	const tri_t * const t
 )
 {
-	fprintf(stderr, "%.0f,%.0f,%.0f %.0f,%.0f,%.0f %.0f,%.0f,%.0f\n",
+	fprintf(stderr, "%.0f,%.0f,%.0f %.0f,%.0f,%.0f %.0f,%.0f,%.0f norm %.3f,%.3f,%.3f\n",
 		t->p[0].p[0],
 		t->p[0].p[1],
 		t->p[0].p[2],
@@ -959,7 +969,10 @@ tri_print(
 		t->p[1].p[2],
 		t->p[2].p[0],
 		t->p[2].p[1],
-		t->p[2].p[2]
+		t->p[2].p[2],
+		t->normal.p[0],
+		t->normal.p[1],
+		t->normal.p[2]
 	);
 }
 
@@ -976,7 +989,7 @@ tri_coplanar(
 )
 {
 	// the two normals must be parallel-enough
-	const float angle = v3_mag(v3_sub(t0->normal, t1->normal));
+	const float angle = v3_mag(v3_sub(t0->normal_xyz, t1->normal_xyz));
 	if (angle < -coplanar_eps || +coplanar_eps < angle)
 		return -1;
 	
@@ -1386,7 +1399,7 @@ int main(
 	int backface = 1;
 	int coplanar = 1;
 	int hidden = 1;
-	float coplanar_eps = 0.01;
+	float coplanar_eps = 0.0001;
 
 	if(debug)
 	{
@@ -1423,7 +1436,7 @@ int main(
 		for(int j = 0 ; j < 3 ; j++)
 			camera_project(cam, &stl->p[j], &s[j]);
 
-fprintf(stderr, "%.3f,%.3f,%.3f -> %.0f,%.0f\n",
+if(0)fprintf(stderr, "%.3f,%.3f,%.3f -> %.0f,%.0f\n",
 	stl->p[0].p[0],
 	stl->p[0].p[1],
 	stl->p[0].p[2],
@@ -1431,7 +1444,7 @@ fprintf(stderr, "%.3f,%.3f,%.3f -> %.0f,%.0f\n",
 	s[0].p[1]
 );
 
-		tri_t * const tri = tri_new(s);
+		tri_t * const tri = tri_new(s, stl->p);
 
 		// reject this face if any of the vertices are behind us
 		if (tri->min[2] < 0)
@@ -1464,6 +1477,8 @@ reject:
 	for(tri_t * t = zlist ; t ; t = t->next)
 	{
 		unsigned matches = 0;
+tri_print(t);
+
 
 		if(coplanar)
 		for(tri_t * t2 = zlist ; t2 ; t2 = t2->next)
