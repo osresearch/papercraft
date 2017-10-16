@@ -453,6 +453,7 @@ recursive++;
 		// make sure that we're not comparing to our own triangle
 		// or one that shares an edge with us (which might be in
 		// a different order)
+/*
 		if (v2_eq(s->src[0].p, t->p[0].p, 0.005)
 		&&  v2_eq(s->src[1].p, t->p[1].p, 0.005))
 			continue;
@@ -471,6 +472,7 @@ recursive++;
 		if (v2_eq(s->src[0].p, t->p[0].p, 0.005)
 		&&  v2_eq(s->src[1].p, t->p[2].p, 0.005))
 			continue;
+*/
 
 		float z0, z1;
 		int inside0 = tri_find_z(t, &s->p[0], &z0);
@@ -481,9 +483,8 @@ recursive++;
 		// otherwies we discard the segment
 		if (inside0 && inside1)
 		{
-			if (s->p[0].p[2] <= z0)
-				continue;
-			if (s->p[1].p[2] <= z1)
+			if (s->p[0].p[2] <= z0
+			&&  s->p[1].p[2] <= z1)
 				continue;
 			recursive--;
 			return;
