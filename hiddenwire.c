@@ -453,26 +453,24 @@ recursive++;
 		// make sure that we're not comparing to our own triangle
 		// or one that shares an edge with us (which might be in
 		// a different order)
-/*
-		if (v2_eq(s->src[0].p, t->p[0].p, 0.005)
-		&&  v2_eq(s->src[1].p, t->p[1].p, 0.005))
+		if (v2_eq(s->src[0].p, t->p[0].p, 0.0005)
+		&&  v2_eq(s->src[1].p, t->p[1].p, 0.0005))
 			continue;
-		if (v2_eq(s->src[0].p, t->p[1].p, 0.005)
-		&&  v2_eq(s->src[1].p, t->p[2].p, 0.005))
+		if (v2_eq(s->src[0].p, t->p[1].p, 0.0005)
+		&&  v2_eq(s->src[1].p, t->p[2].p, 0.0005))
 			continue;
-		if (v2_eq(s->src[0].p, t->p[2].p, 0.005)
-		&&  v2_eq(s->src[1].p, t->p[0].p, 0.005))
+		if (v2_eq(s->src[0].p, t->p[2].p, 0.0005)
+		&&  v2_eq(s->src[1].p, t->p[0].p, 0.0005))
 			continue;
-		if (v2_eq(s->src[0].p, t->p[1].p, 0.005)
-		&&  v2_eq(s->src[1].p, t->p[0].p, 0.005))
+		if (v2_eq(s->src[0].p, t->p[1].p, 0.0005)
+		&&  v2_eq(s->src[1].p, t->p[0].p, 0.0005))
 			continue;
-		if (v2_eq(s->src[0].p, t->p[2].p, 0.005)
-		&&  v2_eq(s->src[1].p, t->p[1].p, 0.005))
+		if (v2_eq(s->src[0].p, t->p[2].p, 0.0005)
+		&&  v2_eq(s->src[1].p, t->p[1].p, 0.0005))
 			continue;
-		if (v2_eq(s->src[0].p, t->p[0].p, 0.005)
-		&&  v2_eq(s->src[1].p, t->p[2].p, 0.005))
+		if (v2_eq(s->src[0].p, t->p[0].p, 0.0005)
+		&&  v2_eq(s->src[1].p, t->p[2].p, 0.0005))
 			continue;
-*/
 
 		float z0, z1;
 		int inside0 = tri_find_z(t, &s->p[0], &z0);
@@ -605,12 +603,16 @@ recursive++;
 			{
 				// shorten it on the 0 side
 				s->p[0] = is[0];
+// huh? shouldn't we process this one?
+return;
 				continue;
 			} else
 			if (inside1)
 			{
 				// shorten it on the 1 side
 				s->p[1] = is[0];
+// huh? shouldn't we process this one?
+return;
 				continue;
 			} else {
 				// both outside, but an intersection?
@@ -644,10 +646,7 @@ int main(
 	const size_t max_len = 32 << 20;
 	uint8_t * const buf = calloc(max_len, 1);
 
-	float phi = argc > 1 ? atof(argv[1]) * M_PI/180 : 0;
-	float theta = argc > 2 ? atof(argv[2]) * M_PI/180 : 0;
-	float psi = argc > 3 ? atof(argv[3]) * M_PI/180 : 0;
-	int filter_level = argc > 4 ? atoi(argv[4]) : 4;
+	int filter_level = argc > 4 ? atoi(argv[4]) : 1;
 
 	ssize_t rc = read(0, buf, max_len);
 	if (rc == -1)
@@ -657,9 +656,9 @@ int main(
 	const stl_face_t * const stl_faces = (const void*)(hdr+1);
 	const int num_triangles = hdr->num_triangles;
 
-	int backface = filter_level > 0;
-	int hidden = filter_level > 1;
-	int coplanar = filter_level > 2;
+	int backface = filter_level & 1;
+	int hidden = filter_level & 2;
+	int coplanar = filter_level & 4;
 	float coplanar_eps = 0.001;
 
 	if(debug)
@@ -670,8 +669,10 @@ int main(
 
 
 	// looking at (0,0,0)
-	v3_t eye = { { 0, 0, 400 } };
-	const camera_t * const cam = camera_new(eye, phi, theta, psi);
+	v3_t eye = { { 100, 20, 50 } };
+	v3_t lookat = { { 0, 0, 0 } };
+	v3_t up = { { 0, 0, 1 } };
+	const camera_t * const cam = camera_new(eye, lookat, up);
 
 	printf("<svg xmlns=\"http://www.w3.org/2000/svg\">\n");
 
@@ -695,7 +696,9 @@ int main(
 		v3_t s[3];
 
 		for(int j = 0 ; j < 3 ; j++)
+		{
 			camera_project(cam, &stl->p[j], &s[j]);
+		}
 
 if(0)fprintf(stderr, "%.3f,%.3f,%.3f -> %.0f,%.0f\n",
 	stl->p[0].p[0],
@@ -776,8 +779,12 @@ reject:
 	if(hidden)
 	{
 		// work on each segment, intersecting it with all of the triangles
+		int processed = 0;
 		while(slist)
 		{
+			if (++processed % 100 == 0)
+				fprintf(stderr, "Hidden %d\n", processed);
+
 			seg_t * s = slist;
 			slist = s->next;
 
