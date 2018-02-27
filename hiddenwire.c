@@ -669,9 +669,9 @@ int main(
 
 
 	// looking at (0,0,0)
-	v3_t eye = { { 100, 20, 50 } };
+	v3_t eye = { { -100, 40, 50 } };
 	v3_t lookat = { { 0, 0, 0 } };
-	v3_t up = { { 0, 0, 1 } };
+	v3_t up = { { 0, -1, 0 } };
 	const camera_t * const cam = camera_new(eye, lookat, up);
 
 	printf("<svg xmlns=\"http://www.w3.org/2000/svg\">\n");

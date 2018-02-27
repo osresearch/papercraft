@@ -7,18 +7,16 @@ typedef struct _camera_t camera_t;
 extern camera_t *
 camera_new(
 	v3_t eye,
-	float phi,
-	float theta,
-	float psi
+	v3_t lookat,
+	v3_t up
 );
 
 extern void
 camera_setup(
 	camera_t * const c,
 	v3_t eye,
-	float phi,
-	float theta,
-	float psi
+	v3_t lookat,
+	v3_t up
 );
 
 /** Transform a XYZ point into a screen point.

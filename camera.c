@@ -11,26 +11,24 @@
 
 struct _camera_t
 {
-	float	zoom;
-	v3_t	eye;
-	float	r[3][3];
+	float	near;
+	float	far;
+	float	r[4][4];
 };
 
 
 camera_t *
 camera_new(
 	v3_t eye,
-	float phi,
-	float theta,
-	float psi
+	v3_t lookat,
+	v3_t up
 )
 {
 	camera_t * c = calloc(1, sizeof(*c));
 	if (!c)
 		return NULL;
 
-	c->zoom = 4096;
-	camera_setup(c, eye, phi, theta, psi);
+	camera_setup(c, eye, lookat, up);
 	return c;
 }
 
@@ -39,64 +37,126 @@ void
 camera_setup(
 	camera_t * const c,
 	v3_t eye,
-	float phi,
-	float theta,
-	float psi
+	v3_t lookat,
+	v3_t up
 )
 {
-	const float sx = sin(phi);
-	const float cx = cos(phi);
-	const float sy = sin(theta);
-	const float cy = cos(theta);
-	const float sz = sin(psi);
-	const float cz = cos(psi);
+	// compute the basis for the camera
+	// negative look direction from eye to destination
+	v3_t w = v3_norm(v3_sub(eye, lookat));
 
-	c->r[0][0] =   cy * cz;
-	c->r[0][1] = (-cy * sz) + (sx * sy * cz);
-	c->r[0][2] = ( sx * sz) + (cx * sy * cz);
+	// compute the side axis
+	v3_t u = v3_norm(v3_cross(up, w));
 
-	c->r[1][0] =   cx * sz;
-	c->r[1][1] = ( cx * cz) + (sx * sy * sz);
-	c->r[1][2] = (-sx * cz) + (cx * sy * sz);
+	// and the "up" normal
+	v3_t v = v3_norm(v3_cross(w, u));
 
-	c->r[2][0] = -sy;
-	c->r[2][1] =  sx * cy;
-	c->r[2][2] =  cx * cy;
+	float cam[4][4] = {};
 
-	c->eye = eye;
- }
+	cam[0][0] = u.p[0];
+	cam[1][0] = u.p[1];
+	cam[2][0] = u.p[2];
+	cam[3][0] = 0;
+
+	cam[0][1] = v.p[0];
+	cam[1][1] = v.p[1];
+	cam[2][1] = v.p[2];
+	cam[3][1] = 0;
+
+	cam[0][2] = w.p[0];
+	cam[1][2] = w.p[1];
+	cam[2][2] = w.p[2];
+	cam[3][2] = 0;
+
+	// compute u dot c, v dot c, w, dot c
+	cam[0][3] = -v3_dot(lookat, u);
+	cam[1][3] = -v3_dot(lookat, v);
+	cam[2][3] = -v3_dot(lookat, w);
+	cam[3][3] = 1;
+
+	for(int i = 0 ; i < 4 ; i++)
+	{
+		for(int j = 0 ; j < 4 ; j++)
+			fprintf(stderr, " %+5.3f", cam[i][j]);
+		fprintf(stderr, "\n");
+	}
+
+	// now compute the perspective projection matrix
+	float fov = 60;
+	float s = 1.0 / tan(fov * M_PI / 180 / 2);
+	c->near = 1.0;
+	c->far = 200;
+	float f1 = - c->far * (c->far - c->near);
+	float f2 = - c->far * c->near / (c->far - c->near);
+
+	float pers[4][4] = {
+		{ s, 0, 0, 0 },
+		{ 0, s, 0, 0 },
+		{ 0, 0, f1, -1 },
+		{ 0, 0, f2, 0 },
+	};
+
+	// and apply it to the camera matrix to generate transform
+	for(int i = 0 ; i < 4 ; i++)
+	{
+		for(int j = 0 ; j < 4 ; j++)
+		{
+			float d = 0;
+			for(int k = 0 ; k < 4 ; k++)
+				d += cam[i][k] * pers[k][j];
+			c->r[i][j] = d;
+		}
+	}
+	for(int i = 0 ; i < 4 ; i++)
+	{
+		for(int j = 0 ; j < 4 ; j++)
+			fprintf(stderr, " %+5.3f", c->r[i][j]);
+		fprintf(stderr, "\n");
+	}
+}
 
 
 /** Transform a XYZ point into a screen point.
  *
  * Returns 0 if this is behind us.  Perhaps it should do a z buffer?
+ * https://en.wikipedia.org/wiki/3D_projection
  */
 int
 camera_project(
 	const camera_t * const c,
-	const v3_t * const v,
+	const v3_t * const v_in,
 	v3_t * const v_out
 )
 {
-	v3_t p = c->eye;
+	float v[4] = { v_in->p[0], v_in->p[1], v_in->p[2], 1 };
+	float p[4] = { 0, 0, 0, 0};
 
+	for (int i = 0 ; i < 4 ; i++)
+		for (int j = 0 ; j < 4 ; j++)
+			p[i] += c->r[j][i] * v[j];
+
+	if(0) fprintf(stderr, "%.2f,%.2f,%.2f -> %.2f,%.2f,%.2f,%.2f\n",
+		v[0], v[1], v[2],
+		p[0], p[1], p[2], p[3]
+	);
+
+/*
 	for (int i = 0 ; i < 3 ; i++)
-		for (int j = 0 ; j < 3 ; j++)
-			p.p[i] += c->r[i][j] * v->p[j];
+		p[i] /= p[3];
+*/
+	p[2] /= p[3];
 
-	// what if p->p[2] == 0?
 
 	// Transform to screen coordinate frame,
-	// is this rotating?
-	float px = p.p[1] / p.p[2];
-	float py = p.p[0] / p.p[2];
-	float pz = p.p[2] / c->zoom;
+	// and return it to the caller
+	v_out->p[0] = p[0] * 100;
+	v_out->p[1] = p[1] * 100;
+	v_out->p[2] = p[2] * 100;
 
-	// return it to the caller
-	v_out->p[0] = px * c->zoom;
-	v_out->p[1] = py * c->zoom;
-	v_out->p[2] = pz * c->zoom;
-
+	// what if p->p[4] == 0?
 	// pz < 0 == The point is behind us; do not display?
-	return pz <= 0 ? 0 : 1;
+	if (p[2] < c->near || p[2] > c->far)
+		return 0;
+
+	return 1;
 }
