@@ -10,14 +10,50 @@
 #include <math.h>
 #include <err.h>
 #include <assert.h>
+#include <getopt.h>
 #include "v3.h"
 #include "camera.h"
+
+
+static const char usage[] =
+"Usage: hiddenwire [options] file.stl > file.svg\n"
+"\n"
+"Options:\n"
+" -h | -? | --help       Help\n"
+" -v | --verbose         Enable debugging output\n"
+" -c | --camera x,y,z    Camera position\n"
+" -l | --lookat x,y,z    Target\n"
+" -u | --up x,y,z        Up vector\n"
+" -F | --fov deg         Field-of-view angle\n"
+" -s | --scale s         Scale factor\n"
+" -p | --prune s         Prune lines shorter than s\n"
+" --no-backface          Disable backface culling\n"
+" --no-coplanar          Disable coplanar merging\n"
+" --no-hiddenwire        Disable hidden wire frame removal\n"
+"\n";
+
+static const struct option long_options[] = {
+	{ "help",			0, NULL, 'h' },
+	{ "verbose",			0, NULL, 'v' },
+	{ "no-backface",		0, NULL, 'B' },
+	{ "no-coplanar",		0, NULL, 'C' },
+	{ "no-hiddenwire",		0, NULL, 'H' },
+	{ "camera",			1, NULL, 'c' },
+	{ "lookat",			1, NULL, 'l' },
+	{ "up",				1, NULL, 'u' },
+	{ "scale",			1, NULL, 's' },
+	{ "prune",			1, NULL, 'p' },
+	{ "fov",			1, NULL, 'F' },
+	{ NULL,				0, NULL, 0 },
+};
+
+
 
 #ifndef M_PI
 #define 	M_PI   3.1415926535897932384
 #endif
 
-static int debug = 1;
+static int debug = 0;
 
 typedef struct
 {
@@ -636,6 +672,18 @@ return;
 	recursive--;
 }
 
+
+int v3_parse(v3_t * out, const char * str)
+{
+	int rc = sscanf(str, "%f,%f,%f",
+		&out->p[0],
+		&out->p[1],
+		&out->p[2]
+	);
+	if (rc != 3)
+		return -1;
+	return 0;
+}
 			
 
 int main(
@@ -643,22 +691,78 @@ int main(
 	char ** argv
 )
 {
+	if (argc <= 1)
+	{
+		fprintf(stderr, "%s", usage);
+		return EXIT_FAILURE;
+	}
+
+	int opt;
+	int do_backface = 1;
+	int do_coplanar = 1;
+	int do_hidden = 1;
+	v3_t eye = { { 100, 0, 0 } };
+	v3_t lookat = { { 0, 0, 0 } };
+	v3_t up = { { 0, 0, 1 } };
+	float scale = 1;
+	float fov = 45;
+	float prune = 0.1;
+
+	while((opt = getopt_long(argc, argv ,"h?vBCHc:l:s:u:p:F:", long_options, NULL)) != -1)
+	{
+		switch(opt)
+		{
+		case 'h' : case '?':
+			printf("%s", usage);
+			return EXIT_SUCCESS;
+		default:
+			fprintf(stderr, "%s", usage);
+			return EXIT_FAILURE;
+		case 'v': debug++; break;
+
+		case 'B': do_backface = 0; break;
+		case 'C': do_coplanar = 0; break;
+		case 'H': do_hidden = 0; break;
+
+		case 'p': prune = atof(optarg); break;
+		case 's': scale = atof(optarg); break;
+		case 'F': fov = atof(optarg); break;
+
+		case 'c':
+			if (v3_parse(&eye, optarg) < 0)
+				return EXIT_FAILURE;
+			break;
+		case 'l':
+			if (v3_parse(&lookat, optarg) < 0)
+				return EXIT_FAILURE;
+			break;
+		case 'u':
+			if (v3_parse(&up, optarg) < 0)
+				return EXIT_FAILURE;
+			break;
+		}
+	}
+
+	// todo: sanity check fov, scale, etc
+
 	const size_t max_len = 32 << 20;
 	uint8_t * const buf = calloc(max_len, 1);
+	size_t offset = 0;
 
-	int filter_level = argc > 4 ? atoi(argv[4]) : 1;
-
-	ssize_t rc = read(0, buf, max_len);
-	if (rc == -1)
-		return EXIT_FAILURE;
+	while(1)
+	{
+		ssize_t rc = read(0, buf+offset, max_len - offset);
+		if (rc == -1)
+			return EXIT_FAILURE;
+		if (rc == 0)
+			break;
+		offset += rc;
+	}
 
 	const stl_header_t * const hdr = (const void*) buf;
 	const stl_face_t * const stl_faces = (const void*)(hdr+1);
 	const int num_triangles = hdr->num_triangles;
 
-	int backface = filter_level & 1;
-	int hidden = filter_level & 2;
-	int coplanar = filter_level & 4;
 	float coplanar_eps = 0.001;
 
 	if(debug)
@@ -668,16 +772,12 @@ int main(
 	}
 
 
-	// looking at (0,0,0)
-	v3_t eye = { { -100, 40, 50 } };
-	v3_t lookat = { { 0, 0, 0 } };
-	v3_t up = { { 0, -1, 0 } };
-	const camera_t * const cam = camera_new(eye, lookat, up);
+	const camera_t * const cam = camera_new(eye, lookat, up, fov, scale);
 
 	printf("<svg xmlns=\"http://www.w3.org/2000/svg\">\n");
 
-	float off_x = 500;
-	float off_y = 500;
+	float off_x = 0;
+	float off_y = 0;
 	printf("<g transform=\"translate(%f %f)\">\n", off_x, off_y);
 
 	int rejected = 0;
@@ -696,17 +796,17 @@ int main(
 		v3_t s[3];
 
 		for(int j = 0 ; j < 3 ; j++)
-		{
 			camera_project(cam, &stl->p[j], &s[j]);
-		}
 
-if(0)fprintf(stderr, "%.3f,%.3f,%.3f -> %.0f,%.0f\n",
-	stl->p[0].p[0],
-	stl->p[0].p[1],
-	stl->p[0].p[2],
-	s[0].p[0],
-	s[0].p[1]
-);
+		if(debug >= 2)
+		fprintf(stderr, "%.3f,%.3f,%.3f -> %.1f,%.1f,%.1f\n",
+			stl->p[0].p[0],
+			stl->p[0].p[1],
+			stl->p[0].p[2],
+			s[0].p[0],
+			s[0].p[1],
+			s[0].p[2]
+		);
 
 		tri_t * const tri = tri_new(s, stl->p);
 
@@ -717,7 +817,7 @@ if(0)fprintf(stderr, "%.3f,%.3f,%.3f -> %.0f,%.0f\n",
 		// do a back-face cull to determine if this triangle
 		// is not facing us. we have to determine the orientation
 		// from the winding of the new projection
-		if (backface && tri->normal.p[2] <= 0)
+		if (do_backface && tri->normal.p[2] <= 0)
 			goto reject;
 
 		retained++;
@@ -742,7 +842,7 @@ reject:
 	{
 		unsigned matches = 0;
 
-		if(coplanar)
+		if(do_coplanar)
 		for(tri_t * t2 = zlist ; t2 ; t2 = t2->next)
 		{
 			if (t == t2)
@@ -776,7 +876,7 @@ reject:
 	// we now have a z-sorted list of triangles
 	rejected = 0;
 
-	if(hidden)
+	if(do_hidden)
 	{
 		// work on each segment, intersecting it with all of the triangles
 		int processed = 0;

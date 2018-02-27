@@ -8,7 +8,9 @@ extern camera_t *
 camera_new(
 	v3_t eye,
 	v3_t lookat,
-	v3_t up
+	v3_t up,
+	float fov,
+	float scale
 );
 
 extern void
@@ -16,7 +18,9 @@ camera_setup(
 	camera_t * const c,
 	v3_t eye,
 	v3_t lookat,
-	v3_t up
+	v3_t up,
+	float fov,
+	float scale
 );
 
 /** Transform a XYZ point into a screen point.

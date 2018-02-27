@@ -21,14 +21,16 @@ camera_t *
 camera_new(
 	v3_t eye,
 	v3_t lookat,
-	v3_t up
+	v3_t up,
+	float fov,
+	float scale
 )
 {
 	camera_t * c = calloc(1, sizeof(*c));
 	if (!c)
 		return NULL;
 
-	camera_setup(c, eye, lookat, up);
+	camera_setup(c, eye, lookat, up, fov, scale);
 	return c;
 }
 
@@ -38,7 +40,9 @@ camera_setup(
 	camera_t * const c,
 	v3_t eye,
 	v3_t lookat,
-	v3_t up
+	v3_t up,
+	float fov,
+	float scale
 )
 {
 	// compute the basis for the camera
@@ -82,7 +86,6 @@ camera_setup(
 	}
 
 	// now compute the perspective projection matrix
-	float fov = 60;
 	float s = 1.0 / tan(fov * M_PI / 180 / 2);
 	c->near = 1.0;
 	c->far = 200;
@@ -149,9 +152,9 @@ camera_project(
 
 	// Transform to screen coordinate frame,
 	// and return it to the caller
-	v_out->p[0] = p[0] * 100;
-	v_out->p[1] = p[1] * 100;
-	v_out->p[2] = p[2] * 100;
+	v_out->p[0] = p[0];
+	v_out->p[1] = p[1];
+	v_out->p[2] = p[2];
 
 	// what if p->p[4] == 0?
 	// pz < 0 == The point is behind us; do not display?
