@@ -343,6 +343,35 @@ seg_print(
 	);
 }
 
+// Compute the length of a line in screen space, ignoring Z
+float
+v3_dist_2d(
+	const v3_t * p0,
+	const v3_t * p1
+)
+{
+	const float dx = p1->p[0] - p0->p[0];
+	const float dy = p1->p[1] - p0->p[1];
+
+	return sqrt(dx*dx + dy*dy);
+}
+
+
+// Compute the 2D area of a triangle in screen space
+// using Heron's formula
+float
+tri_area_2d(
+	const tri_t * const t
+)
+{
+	const float a = v3_dist_2d(&t->p[0], &t->p[1]);
+	const float b = v3_dist_2d(&t->p[1], &t->p[2]);
+	const float c = v3_dist_2d(&t->p[2], &t->p[0]);
+	const float s = (a + b + c) / 2;
+
+	return sqrt(s * (s-a) * (s-b) * (s-c));
+}
+
 void
 tri_print(
 	const tri_t * const t
@@ -818,6 +847,10 @@ int main(
 		// is not facing us. we have to determine the orientation
 		// from the winding of the new projection
 		if (do_backface && tri->normal.p[2] <= 0)
+			goto reject;
+
+		// prune the small triangles in the screen space
+		if (tri_area_2d(tri) < prune)
 			goto reject;
 
 		retained++;
