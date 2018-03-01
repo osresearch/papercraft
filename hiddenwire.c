@@ -2,6 +2,8 @@
  * Render a hidden wireframe version of an STL file.
  *
  */
+// ./hiddenwire --no-hidden --prune 1 -v < nyc-50000.stl  --camera 400,60,-600 --lookat 450,0,-800 --up 0,1,0 --fov 20  > test3.svg
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -102,11 +104,12 @@ svg_line(
 	float thick
 )
 {
+	// invert the sense of y
 	printf("<line x1=\"%fpx\" y1=\"%fpx\" x2=\"%fpx\" y2=\"%fpx\" stroke=\"%s\" stroke-width=\"%.1fpx\"/>\n",
 		p1[0],
-		p1[1],
+		-p1[1],
 		p2[0],
-		p2[1],
+		-p2[1],
 		color,
 		thick
 	);
@@ -875,8 +878,8 @@ int main(
 
 	printf("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%.0fpx\" height=\"%.0fpx\" viewbox=\"0 0 %.0f %.0f\">\n", width, height, width, height);
 
-	float off_x = 0; // width/2;
-	float off_y = 0; // height/2;
+	float off_x = width/2;
+	float off_y = height/2;
 	printf("<g transform=\"translate(%f %f)\">\n", off_x, off_y);
 
 	int rejected = 0;
@@ -907,6 +910,10 @@ int main(
 				behind++;
 				goto reject_early;
 			}
+
+			s[j].p[0] *= width;
+			s[j].p[1] *= width;
+			s[j].p[2] *= width;
 		}
 
 		if(debug >= 2)
@@ -921,6 +928,7 @@ int main(
 				s[j].p[2]
 			);
 		}
+
 
 		tri_t * const tri = tri_new(s, stl->p);
 
