@@ -9,8 +9,7 @@ camera_new(
 	v3_t eye,
 	v3_t lookat,
 	v3_t up,
-	float fov,
-	float scale
+	float fov
 );
 
 extern void
@@ -19,8 +18,7 @@ camera_setup(
 	v3_t eye,
 	v3_t lookat,
 	v3_t up,
-	float fov,
-	float scale
+	float fov
 );
 
 /** Transform a XYZ point into a screen point.

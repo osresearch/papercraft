@@ -768,8 +768,10 @@ int onscreen(
 {
 	if (p->p[0] < -width/2 || width/2 < p->p[0])
 		return 0;
+/*
 	if (p->p[1] < -height/2 || height/2 < p->p[1])
 		return 0;
+*/
 /*
 	if (p->p[0] < 0 || width < p->p[0])
 		return 0;
@@ -868,7 +870,8 @@ int main(
 	}
 
 
-	const camera_t * const cam = camera_new(eye, lookat, up, fov, scale);
+	(void) scale;
+	const camera_t * const cam = camera_new(eye, lookat, up, fov);
 
 	printf("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%.0fpx\" height=\"%.0fpx\" viewbox=\"0 0 %.0f %.0f\">\n", width, height, width, height);
 
@@ -897,18 +900,27 @@ int main(
 
 		for(int j = 0 ; j < 3 ; j++)
 		{
-			camera_project(cam, &stl->p[j], &s[j]);
+			// if any points are behind us, reject
+			// this one
+			if (!camera_project(cam, &stl->p[j], &s[j]))
+			{
+				behind++;
+				goto reject_early;
+			}
 		}
 
 		if(debug >= 2)
-		fprintf(stderr, "%.3f,%.3f,%.3f -> %.1f,%.1f,%.1f\n",
-			stl->p[0].p[0],
-			stl->p[0].p[1],
-			stl->p[0].p[2],
-			s[0].p[0],
-			s[0].p[1],
-			s[0].p[2]
-		);
+		for(int j = 0 ; j < 3 ; j++)
+		{
+			fprintf(stderr, "%.3f %.3f %.3f -> %.3f %.3f %.3f\n",
+				stl->p[j].p[0],
+				stl->p[j].p[1],
+				stl->p[j].p[2],
+				s[j].p[0],
+				s[j].p[1],
+				s[j].p[2]
+			);
+		}
 
 		tri_t * const tri = tri_new(s, stl->p);
 
@@ -962,6 +974,8 @@ tri_print(tri);
 
 reject:
 		tri_delete(tri);
+reject_early:
+		continue;
 	}
 
 	if (debug)

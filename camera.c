@@ -22,15 +22,14 @@ camera_new(
 	v3_t eye,
 	v3_t lookat,
 	v3_t up,
-	float fov,
-	float scale
+	float fov
 )
 {
 	camera_t * c = calloc(1, sizeof(*c));
 	if (!c)
 		return NULL;
 
-	camera_setup(c, eye, lookat, up, fov, scale);
+	camera_setup(c, eye, lookat, up, fov);
 	return c;
 }
 
@@ -41,8 +40,7 @@ camera_setup(
 	v3_t eye,
 	v3_t lookat,
 	v3_t up,
-	float fov,
-	float scale
+	float fov
 )
 {
 	// compute the basis for the camera
@@ -62,9 +60,9 @@ camera_setup(
 		{ u.p[2], v.p[2], w.p[2], 0 },
 		{ -v3_dot(u,eye), -v3_dot(v,eye), -v3_dot(w,eye), 1 },
 #else
-		{ u.p[0], u.p[1], u.p[2], -v3_dot(u,lookat) },
-		{ v.p[0], v.p[1], v.p[2], -v3_dot(v,lookat) },
-		{ w.p[0], w.p[1], w.p[2], -v3_dot(w,lookat) },
+		{ u.p[0], u.p[1], u.p[2], -v3_dot(u,eye) },
+		{ v.p[0], v.p[1], v.p[2], -v3_dot(v,eye) },
+		{ w.p[0], w.p[1], w.p[2], -v3_dot(w,eye) },
 		{ 0,      0,      0,      1 },
 #endif
 	};
@@ -80,7 +78,7 @@ camera_setup(
 
 	// now compute the perspective projection matrix
 	float s = 1.0 / tan(fov * M_PI / 180 / 2);
-	c->near = 1.0;
+	c->near = 4.0;
 	c->far = 20;
 	float f1 = - c->far / (c->far - c->near);
 	float f2 = - c->far * c->near / (c->far - c->near);
@@ -142,17 +140,28 @@ camera_project(
 		for (int j = 0 ; j < 4 ; j++)
 			p[i] += c->r[i][j] * v[j];
 
-	if(1) fprintf(stderr, "%.2f %.2f %.2f -> %.2f %.2f %.2f %.2f\n",
+	// what if p->p[4] == 0?
+	// pz < 0 == The point is behind us; do not display?
+	//if (p[2] < c->near || p[2] > c->far)
+	if (p[2] < 0)
+		return 0;
+
+	p[0] /= p[3];
+	p[1] /= p[3];
+/*
+	for (int i = 0 ; i < 3 ; i++)
+		p[i] /= p[3];
+	p[2] /= p[3];
+*/
+
+	if(0) fprintf(stderr, "%.2f %.2f %.2f -> %.2f %.2f %.2f %.2f\n",
 		v[0], v[1], v[2],
 		p[0], p[1], p[2], p[3]
 	);
 
 /*
-	for (int i = 0 ; i < 3 ; i++)
-		p[i] /= p[3];
 	p[0] *= -1;
 	p[1] *= -1;
-	p[2] /= p[3];
 */
 
 
@@ -162,10 +171,6 @@ camera_project(
 	v_out->p[1] = p[1];
 	v_out->p[2] = p[2];
 
-	// what if p->p[4] == 0?
-	// pz < 0 == The point is behind us; do not display?
-	if (p[2] < c->near || p[2] > c->far)
-		return 0;
 
 	return 1;
 }
