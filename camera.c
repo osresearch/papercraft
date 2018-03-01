@@ -55,29 +55,22 @@ camera_setup(
 	// and the "up" normal
 	v3_t v = v3_norm(v3_cross(w, u));
 
-	float cam[4][4] = {};
+	float cam[4][4] = {
+#if 0
+		{ u.p[0], v.p[0], w.p[0], 0 },
+		{ u.p[1], v.p[1], w.p[1], 0 },
+		{ u.p[2], v.p[2], w.p[2], 0 },
+		{ -v3_dot(u,eye), -v3_dot(v,eye), -v3_dot(w,eye), 1 },
+#else
+		{ u.p[0], u.p[1], u.p[2], -v3_dot(u,lookat) },
+		{ v.p[0], v.p[1], v.p[2], -v3_dot(v,lookat) },
+		{ w.p[0], w.p[1], w.p[2], -v3_dot(w,lookat) },
+		{ 0,      0,      0,      1 },
+#endif
+	};
 
-	cam[0][0] = u.p[0];
-	cam[1][0] = u.p[1];
-	cam[2][0] = u.p[2];
-	cam[3][0] = 0;
 
-	cam[0][1] = v.p[0];
-	cam[1][1] = v.p[1];
-	cam[2][1] = v.p[2];
-	cam[3][1] = 0;
-
-	cam[0][2] = w.p[0];
-	cam[1][2] = w.p[1];
-	cam[2][2] = w.p[2];
-	cam[3][2] = 0;
-
-	// compute u dot c, v dot c, w, dot c
-	cam[0][3] = -v3_dot(lookat, u);
-	cam[1][3] = -v3_dot(lookat, v);
-	cam[2][3] = -v3_dot(lookat, w);
-	cam[3][3] = 1;
-
+	fprintf(stderr, "Camera:\n");
 	for(int i = 0 ; i < 4 ; i++)
 	{
 		for(int j = 0 ; j < 4 ; j++)
@@ -88,8 +81,8 @@ camera_setup(
 	// now compute the perspective projection matrix
 	float s = 1.0 / tan(fov * M_PI / 180 / 2);
 	c->near = 1.0;
-	c->far = 200;
-	float f1 = - c->far * (c->far - c->near);
+	c->far = 20;
+	float f1 = - c->far / (c->far - c->near);
 	float f2 = - c->far * c->near / (c->far - c->near);
 
 	float pers[4][4] = {
@@ -99,6 +92,14 @@ camera_setup(
 		{ 0, 0, f2, 0 },
 	};
 
+	fprintf(stderr, "Perspective:\n");
+	for(int i = 0 ; i < 4 ; i++)
+	{
+		for(int j = 0 ; j < 4 ; j++)
+			fprintf(stderr, " %+5.3f", pers[i][j]);
+		fprintf(stderr, "\n");
+	}
+
 	// and apply it to the camera matrix to generate transform
 	for(int i = 0 ; i < 4 ; i++)
 	{
@@ -106,10 +107,13 @@ camera_setup(
 		{
 			float d = 0;
 			for(int k = 0 ; k < 4 ; k++)
-				d += cam[i][k] * pers[k][j];
+				d += pers[i][k] * cam[k][j];
 			c->r[i][j] = d;
 		}
 	}
+
+
+	fprintf(stderr, "Cam*Pers\n");
 	for(int i = 0 ; i < 4 ; i++)
 	{
 		for(int j = 0 ; j < 4 ; j++)
@@ -136,9 +140,9 @@ camera_project(
 
 	for (int i = 0 ; i < 4 ; i++)
 		for (int j = 0 ; j < 4 ; j++)
-			p[i] += c->r[j][i] * v[j];
+			p[i] += c->r[i][j] * v[j];
 
-	if(0) fprintf(stderr, "%.2f,%.2f,%.2f -> %.2f,%.2f,%.2f,%.2f\n",
+	if(1) fprintf(stderr, "%.2f %.2f %.2f -> %.2f %.2f %.2f %.2f\n",
 		v[0], v[1], v[2],
 		p[0], p[1], p[2], p[3]
 	);
@@ -146,8 +150,10 @@ camera_project(
 /*
 	for (int i = 0 ; i < 3 ; i++)
 		p[i] /= p[3];
-*/
+	p[0] *= -1;
+	p[1] *= -1;
 	p[2] /= p[3];
+*/
 
 
 	// Transform to screen coordinate frame,
