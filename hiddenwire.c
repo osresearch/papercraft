@@ -102,7 +102,7 @@ svg_line(
 	float thick
 )
 {
-	printf("<line x1=\"%f\" y1=\"%f\" x2=\"%f\" y2=\"%f\" stroke=\"%s\" stroke-width=\"%.1fpx\"/>\n",
+	printf("<line x1=\"%fpx\" y1=\"%fpx\" x2=\"%fpx\" y2=\"%fpx\" stroke=\"%s\" stroke-width=\"%.1fpx\"/>\n",
 		p1[0],
 		p1[1],
 		p2[0],
@@ -287,6 +287,7 @@ tri_insert(
 	// either we reached the end of the list,
 	// or we have found where our new triangle is sorted
 	t->next = *zlist;
+	t->prev = zlist;
 	*zlist = t;
 	if (t->next)
 		t->next->prev = &t->next;
@@ -448,6 +449,8 @@ tri_coplanar(
  * setting t0 to 0, this becomes:
  * p = a * t1 + b * t2
  * which is two equations with two unknowns
+ *
+ * Returns true if the point is inside the triangle
  */
 int
 tri_find_z(
@@ -702,6 +705,48 @@ return;
 }
 
 
+/*
+ * Fast check to see if t2 is entire occluded by t.
+ */
+int
+tri_behind(
+	const tri_t * const t,
+	const tri_t * const t2
+)
+{
+	float z0, z1, z2;
+	int inside0 = tri_find_z(t, &t2->p[0], &z0);
+	int inside1 = tri_find_z(t, &t2->p[1], &z1);
+	int inside2 = tri_find_z(t, &t2->p[2], &z2);
+
+	// easy check -- if none of the points are inside,
+	// t2 is not entirely occluded
+	if (!inside0 || !inside1 || !inside2)
+		return 0;
+
+	// are all of the intersection points ahead of t2?
+	int behind0 = t2->p[0].p[2] >= z0;
+	int behind1 = t2->p[1].p[2] >= z1;
+	int behind2 = t2->p[2].p[2] >= z2;
+	if (behind0 && behind1 && behind2)
+		return 1;
+
+	// it is a STL violation if they are not all on the
+	// same side (this would indicate that t and t2 intersect
+	// go ahead and prune since it will cause problems
+	if (behind0 || behind1 || behind2)
+	{
+		fprintf(stderr, "WARNING: triangles intersect %.0f %.0f %.0f inside %d %d %d behind %d %d %d\n", z0, z1, z2, inside0, inside1, inside2, behind0, behind1, behind2);
+		tri_print(t);
+		tri_print(t2);
+		return 1;
+	}
+
+	// they are all on the same side
+	return 0;
+}
+
+
 int v3_parse(v3_t * out, const char * str)
 {
 	int rc = sscanf(str, "%f,%f,%f",
@@ -713,7 +758,27 @@ int v3_parse(v3_t * out, const char * str)
 		return -1;
 	return 0;
 }
-			
+
+
+int onscreen(
+	const v3_t * const p,
+	const float width,
+	const float height
+)
+{
+	if (p->p[0] < -width/2 || width/2 < p->p[0])
+		return 0;
+	if (p->p[1] < -height/2 || height/2 < p->p[1])
+		return 0;
+/*
+	if (p->p[0] < 0 || width < p->p[0])
+		return 0;
+	if (p->p[1] < 0 || height < p->p[1])
+		return 0;
+*/
+	return 1;
+}
+
 
 int main(
 	int argc,
@@ -736,6 +801,8 @@ int main(
 	float scale = 1;
 	float fov = 45;
 	float prune = 0.1;
+	float width = 4096;
+	float height = 2048;
 
 	while((opt = getopt_long(argc, argv ,"h?vBCHc:l:s:u:p:F:", long_options, NULL)) != -1)
 	{
@@ -803,10 +870,10 @@ int main(
 
 	const camera_t * const cam = camera_new(eye, lookat, up, fov, scale);
 
-	printf("<svg xmlns=\"http://www.w3.org/2000/svg\">\n");
+	printf("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"%.0fpx\" height=\"%.0fpx\" viewbox=\"0 0 %.0f %.0f\">\n", width, height, width, height);
 
-	float off_x = 0;
-	float off_y = 0;
+	float off_x = 0; // width/2;
+	float off_y = 0; // height/2;
 	printf("<g transform=\"translate(%f %f)\">\n", off_x, off_y);
 
 	int rejected = 0;
@@ -815,6 +882,10 @@ int main(
 	seg_t * slist_visible = NULL;
 
 	int retained = 0;
+	int backface = 0;
+	int small_area = 0;
+	int behind = 0;
+	int offscreen = 0;
 
 	// transform the stl by the camera projection and generate
 	// a z-sorted list of triangles
@@ -825,7 +896,9 @@ int main(
 		v3_t s[3];
 
 		for(int j = 0 ; j < 3 ; j++)
+		{
 			camera_project(cam, &stl->p[j], &s[j]);
+		}
 
 		if(debug >= 2)
 		fprintf(stderr, "%.3f,%.3f,%.3f -> %.1f,%.1f,%.1f\n",
@@ -841,32 +914,82 @@ int main(
 
 		// reject this face if any of the vertices are behind us
 		if (tri->min[2] < 0)
+		{
+			behind++;
 			goto reject;
+		}
 
 		// do a back-face cull to determine if this triangle
 		// is not facing us. we have to determine the orientation
 		// from the winding of the new projection
 		if (do_backface && tri->normal.p[2] <= 0)
+		{
+			backface++;
 			goto reject;
+		}
+
+		// if it has any off-screen coords, reject it
+		if (!onscreen(&tri->p[0], width, height)
+		||  !onscreen(&tri->p[1], width, height)
+		||  !onscreen(&tri->p[2], width, height))
+		{
+tri_print(tri);
+			offscreen++;
+			goto reject;
+		}
 
 		// prune the small triangles in the screen space
 		if (tri_area_2d(tri) < prune)
+		{
+			small_area++;
 			goto reject;
+		}
 
-		retained++;
+		const float a = v3_dist_2d(&tri->p[0], &tri->p[1]);
+		const float b = v3_dist_2d(&tri->p[1], &tri->p[2]);
+		const float c = v3_dist_2d(&tri->p[2], &tri->p[0]);
+		if( a < prune || b < prune || c < prune)
+		{
+			small_area++;
+			goto reject;
+		}
 
 		// it passes the first tests, so insert the triangle
 		// into the list and the three line segments
 		tri_insert(&zlist, tri);
+		retained++;
 		continue;
 
 reject:
 		tri_delete(tri);
-		rejected++;
 	}
 
 	if (debug)
-		fprintf(stderr, "Retained %d, rejected %d triangles\n", retained, rejected);
+		fprintf(stderr, "Retained %d triangles, rejected %d behind, %d offscreen, %d backface, %d small\n", retained, behind, offscreen, backface, small_area);
+
+	// drop any triangles that are totally occluded by another
+	// triangle.  this reduces the amount of work for later
+	rejected = 0;
+	for(tri_t * t = zlist ; t ; t = t->next)
+	{
+		tri_t * t2_next;
+		for(tri_t * t2 = zlist ; t2 ; t2 = t2_next)
+		{
+			t2_next = t2->next;
+			if (t == t2)
+				continue;
+
+			if (!tri_behind(t, t2))
+				continue;
+
+			// t2 is occluded by t, remove it from the list
+			rejected++;
+			tri_delete(t2);
+		}
+		
+	}
+	if (debug)
+		fprintf(stderr, "Rejected %d fully occluded triangles\n", rejected);
 
 
 	// generate a list of segments, dropping any coplanar ones
