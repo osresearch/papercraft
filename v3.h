@@ -6,7 +6,7 @@
 
 #include <math.h>
 
-#define EPS 0.0001
+#define EPS 0.001
 
 #ifndef M_PI
 #define 	M_PI   3.1415926535897932384
@@ -82,7 +82,7 @@ v3_len(
 }
 
 static inline double
-v3_mag(
+v3_mag2(
 	const v3_t v0
 )
 {
@@ -90,7 +90,15 @@ v3_mag(
 	float dy = v0.p[1];
 	float dz = v0.p[2];
 
-	return sqrt(dx*dx + dy*dy + dz*dz);
+	return dx*dx + dy*dy + dz*dz;
+}
+
+static inline double
+v3_mag(
+	const v3_t v0
+)
+{
+	return sqrt(v3_mag2(v0));
 }
 
 
@@ -198,5 +206,20 @@ v3_cross(
 
 	return c;
 }
+
+
+// Compute the length of a line in screen space, ignoring Z
+static inline float
+v3_dist_2d(
+	const v3_t * p0,
+	const v3_t * p1
+)
+{
+	const float dx = p1->p[0] - p0->p[0];
+	const float dy = p1->p[1] - p0->p[1];
+
+	return sqrt(dx*dx + dy*dy);
+}
+
 
 #endif
