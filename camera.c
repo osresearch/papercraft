@@ -79,7 +79,7 @@ camera_setup(
 	// now compute the perspective projection matrix
 	float s = 1.0 / tan(fov * M_PI / 180 / 2);
 	c->near = 4.0;
-	c->far = 20;
+	c->far = 200;
 	float f1 = - c->far / (c->far - c->near);
 	float f2 = - c->far * c->near / (c->far - c->near);
 
@@ -146,31 +146,19 @@ camera_project(
 	if (p[2] < 0)
 		return 0;
 
-	p[0] /= p[3];
-	p[1] /= p[3];
-/*
 	for (int i = 0 ; i < 3 ; i++)
 		p[i] /= p[3];
-	p[2] /= p[3];
-*/
 
 	if(0) fprintf(stderr, "%.2f %.2f %.2f -> %.2f %.2f %.2f %.2f\n",
 		v[0], v[1], v[2],
 		p[0], p[1], p[2], p[3]
 	);
 
-/*
-	p[0] *= -1;
-	p[1] *= -1;
-*/
-
-
 	// Transform to screen coordinate frame,
 	// and return it to the caller
 	v_out->p[0] = p[0];
 	v_out->p[1] = p[1];
 	v_out->p[2] = p[2];
-
 
 	return 1;
 }
