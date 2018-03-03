@@ -5,6 +5,7 @@
 #define _papercraft_v3_h_
 
 #include <math.h>
+#include <stdlib.h>
 
 #define EPS 0.001
 
