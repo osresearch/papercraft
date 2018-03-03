@@ -180,8 +180,8 @@ int main(
 	float scale = 1;
 	float fov = 45;
 	float prune = 0.1;
-	float width = 4096;
-	float height = 2048;
+	float width = 1000;
+	float height = 1000;
 
 	while((opt = getopt_long(argc, argv ,"h?vBCHc:l:s:u:p:F:", long_options, NULL)) != -1)
 	{

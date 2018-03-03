@@ -54,17 +54,10 @@ camera_setup(
 	v3_t v = v3_norm(v3_cross(w, u));
 
 	m44_t cam = {{
-#if 0
-		{ u.p[0], v.p[0], w.p[0], 0 },
-		{ u.p[1], v.p[1], w.p[1], 0 },
-		{ u.p[2], v.p[2], w.p[2], 0 },
-		{ -v3_dot(u,eye), -v3_dot(v,eye), -v3_dot(w,eye), 1 },
-#else
 		{ u.p[0], u.p[1], u.p[2], -v3_dot(u,eye) },
 		{ v.p[0], v.p[1], v.p[2], -v3_dot(v,eye) },
 		{ w.p[0], w.p[1], w.p[2], -v3_dot(w,eye) },
 		{ 0,      0,      0,      1 },
-#endif
 	}};
 
 
@@ -77,10 +70,10 @@ camera_setup(
 	}
 
 	// now compute the perspective projection matrix
-if(0) {
-	float s = 1.0 / tan(fov * M_PI / 180 / 2);
+if(1) {
+	float s = 1000.0 / tan(fov * M_PI / 180 / 2);
 	c->near = 1;
-	c->far = 2;
+	c->far = 200;
 	float f1 = - c->far / (c->far - c->near);
 	float f2 = - c->far * c->near / (c->far - c->near);
 
@@ -98,8 +91,7 @@ if(0) {
 			fprintf(stderr, " %+5.3f", pers.m[i][j]);
 		fprintf(stderr, "\n");
 	}
-	// and apply it to the camera matrix to generate transform
-	m44_mult(&c->r, &cam, &pers);
+	m44_mult(&c->r, &pers, &cam);
 } else {
 	// no perspective
 	m44_t pers = {{
@@ -109,7 +101,7 @@ if(0) {
 		{ 0, 0, 0, 1 },
 	}};
 	// and apply it to the camera matrix to generate transform
-	m44_mult(&c->r, &cam, &pers);
+	m44_mult(&c->r, &pers, &cam);
 }
 
 
@@ -139,7 +131,7 @@ camera_project(
 	v4_t v = {{ v_in->p[0], v_in->p[1], v_in->p[2], 1 }};
 	v4_t p = m44_multv(&c->r, &v);
 
-	p.p[2] *= -1;
+	//p.p[2] *= -1;
 
 	// what if p->p[4] == 0?
 	// pz < 0 == The point is behind us; do not display?
@@ -148,8 +140,8 @@ camera_project(
 		return 0;
 
 	// shrink by the distance
-	p.p[0] *= 1000 / p.p[2];
-	p.p[1] *= 1000 / p.p[2];
+	p.p[0] *= 1.0 / p.p[3];
+	p.p[1] *= 1.0 / p.p[3];
 	//p[2] /= 1000;
 
 	// Transform to screen coordinate frame,
