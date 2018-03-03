@@ -62,7 +62,7 @@ coplanar_check(
 	for (int i = 0 ; i < 3 ; i++)
 	{
 		for (int j = 0 ; j < 3 ; j++)
-			if (v3_eq(&f1->p[i], &f2->p[j]))
+			if (v3_eq(f1->p[i], f2->p[j]))
 				match[i] = 1;
 	}
 
@@ -132,7 +132,7 @@ coplanar_check(
 	return mask;
 #else
 	// if the normals are close enough, then it is coplanner
-	if (v3_eq(&f1->normal, &f2->normal))
+	if (v3_eq(f1->normal, f2->normal))
 		return mask;
 	else
 		return 0;
@@ -184,7 +184,7 @@ stl_vertex_find(
 	{
 		stl_vertex_t * const v = vertices[x];
 
-		if (v3_eq(&v->p, p))
+		if (v3_eq(v->p, *p))
 			return v;
 	}
 

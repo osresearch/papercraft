@@ -13,7 +13,7 @@ struct _camera_t
 {
 	float	near;
 	float	far;
-	float	r[4][4];
+	m44_t	r;
 };
 
 
@@ -53,7 +53,7 @@ camera_setup(
 	// and the "up" normal
 	v3_t v = v3_norm(v3_cross(w, u));
 
-	float cam[4][4] = {
+	m44_t cam = {{
 #if 0
 		{ u.p[0], v.p[0], w.p[0], 0 },
 		{ u.p[1], v.p[1], w.p[1], 0 },
@@ -65,59 +65,62 @@ camera_setup(
 		{ w.p[0], w.p[1], w.p[2], -v3_dot(w,eye) },
 		{ 0,      0,      0,      1 },
 #endif
-	};
+	}};
 
 
 	fprintf(stderr, "Camera:\n");
 	for(int i = 0 ; i < 4 ; i++)
 	{
 		for(int j = 0 ; j < 4 ; j++)
-			fprintf(stderr, " %+5.3f", cam[i][j]);
+			fprintf(stderr, " %+5.3f", cam.m[i][j]);
 		fprintf(stderr, "\n");
 	}
 
 	// now compute the perspective projection matrix
+if(0) {
 	float s = 1.0 / tan(fov * M_PI / 180 / 2);
-	c->near = 4.0;
-	c->far = 200;
+	c->near = 1;
+	c->far = 2;
 	float f1 = - c->far / (c->far - c->near);
 	float f2 = - c->far * c->near / (c->far - c->near);
 
-	float pers[4][4] = {
+	m44_t pers = {{
 		{ s, 0, 0, 0 },
 		{ 0, s, 0, 0 },
-		{ 0, 0, f1, -1 },
-		{ 0, 0, f2, 0 },
-	};
+		{ 0, 0, f2, -1 },
+		{ 0, 0, f1, 0 },
+	}};
 
 	fprintf(stderr, "Perspective:\n");
 	for(int i = 0 ; i < 4 ; i++)
 	{
 		for(int j = 0 ; j < 4 ; j++)
-			fprintf(stderr, " %+5.3f", pers[i][j]);
+			fprintf(stderr, " %+5.3f", pers.m[i][j]);
 		fprintf(stderr, "\n");
 	}
-
 	// and apply it to the camera matrix to generate transform
-	for(int i = 0 ; i < 4 ; i++)
-	{
-		for(int j = 0 ; j < 4 ; j++)
-		{
-			float d = 0;
-			for(int k = 0 ; k < 4 ; k++)
-				d += pers[i][k] * cam[k][j];
-			c->r[i][j] = d;
-		}
-	}
+	m44_mult(&c->r, &cam, &pers);
+} else {
+	// no perspective
+	m44_t pers = {{
+		{ 1, 0, 0, 0 },
+		{ 0, 1, 0, 0 },
+		{ 0, 0, 1, 0 },
+		{ 0, 0, 0, 1 },
+	}};
+	// and apply it to the camera matrix to generate transform
+	m44_mult(&c->r, &cam, &pers);
+}
 
 
 	fprintf(stderr, "Cam*Pers\n");
 	for(int i = 0 ; i < 4 ; i++)
 	{
 		for(int j = 0 ; j < 4 ; j++)
-			fprintf(stderr, " %+5.3f", c->r[i][j]);
+			fprintf(stderr, " %+5.3f", c->r.m[i][j]);
 		fprintf(stderr, "\n");
 	}
+
 }
 
 
@@ -133,32 +136,29 @@ camera_project(
 	v3_t * const v_out
 )
 {
-	float v[4] = { v_in->p[0], v_in->p[1], v_in->p[2], 1 };
-	float p[4] = { 0, 0, 0, 0};
+	v4_t v = {{ v_in->p[0], v_in->p[1], v_in->p[2], 1 }};
+	v4_t p = m44_multv(&c->r, &v);
 
-	for (int i = 0 ; i < 4 ; i++)
-		for (int j = 0 ; j < 4 ; j++)
-			p[i] += c->r[i][j] * v[j];
+	p.p[2] *= -1;
 
 	// what if p->p[4] == 0?
 	// pz < 0 == The point is behind us; do not display?
 	//if (p[2] < c->near || p[2] > c->far)
-	if (p[2] < 0)
+	if (p.p[2] <= 0)
 		return 0;
 
-	for (int i = 0 ; i < 3 ; i++)
-		p[i] /= p[3];
-
-	if(0) fprintf(stderr, "%.2f %.2f %.2f -> %.2f %.2f %.2f %.2f\n",
-		v[0], v[1], v[2],
-		p[0], p[1], p[2], p[3]
-	);
+	// shrink by the distance
+	p.p[0] *= 1000 / p.p[2];
+	p.p[1] *= 1000 / p.p[2];
+	//p[2] /= 1000;
 
 	// Transform to screen coordinate frame,
 	// and return it to the caller
-	v_out->p[0] = p[0];
-	v_out->p[1] = p[1];
-	v_out->p[2] = p[2];
+	v_out->p[0] = p.p[0];
+	v_out->p[1] = p.p[1];
+	v_out->p[2] = p.p[2];
+
+	v3_print(*v_out);
 
 	return 1;
 }

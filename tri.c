@@ -34,11 +34,8 @@ tri_new(
 
 
 	// compute the bounding box for the triangle in camera space
-	for(int j = 0 ; j < 3 ; j++)
-	{
-		t->min[j] = min(min(t->p[0].p[j], t->p[1].p[j]), t->p[2].p[j]);
-		t->max[j] = max(max(t->p[0].p[j], t->p[1].p[j]), t->p[2].p[j]);
-	}
+	t->min = v3_min(v3_min(t->p[0], t->p[1]), t->p[2]);
+	t->max = v3_max(v3_max(t->p[0], t->p[1]), t->p[2]);
 
 	return t;
 }
@@ -59,7 +56,7 @@ tri_insert(
 
 		// check to see if our new triangle is closer than
 		// the current triangle
-		if(iter->min[2] > t->min[2])
+		if(iter->min.p[2] > t->min.p[2])
 			break;
 
 		zlist = &(iter->next);
@@ -110,7 +107,7 @@ tri_print(
 	const tri_t * const t
 )
 {
-	fprintf(stderr, "%.0f,%.0f,%.0f %.0f,%.0f,%.0f %.0f,%.0f,%.0f norm %.3f,%.3f,%.3f\n",
+	fprintf(stderr, "{{{%+5.1f,%+5.1f,%5.1f }},{{%+5.1f,%+5.1f,%5.1f }},{{%+5.1f,%+5.1f,%5.1f }}}\n", // norm %.3f %.3f %.3f\n",
 		t->p[0].p[0],
 		t->p[0].p[1],
 		t->p[0].p[2],
@@ -119,10 +116,10 @@ tri_print(
 		t->p[1].p[2],
 		t->p[2].p[0],
 		t->p[2].p[1],
-		t->p[2].p[2],
-		t->normal.p[0],
-		t->normal.p[1],
-		t->normal.p[2]
+		t->p[2].p[2]
+		//t->normal.p[0],
+		//t->normal.p[1],
+		//t->normal.p[2]
 	);
 }
 
@@ -149,7 +146,7 @@ tri_coplanar(
 	{
 		for(int j = 0 ; j < 3 ; j++)
 		{
-			if (!v3_eq(&t0->p[i], &t1->p[j]))
+			if (!v3_eq(t0->p[i], t1->p[j]))
 				continue;
 			matches |= 1 << i;
 			break;
@@ -162,10 +159,14 @@ tri_coplanar(
 	case 0x6: return 1;
 	case 0x5: return 2;
 	case 0x7:
-		fprintf(stderr, "uh, three points match?\n");
-		tri_print(t0);
-		tri_print(t1);
-		return -1;
+		// these are likely small triangles that can be ignored
+		if (tri_debug > 3)
+		{
+			fprintf(stderr, "uh, three points match?\n");
+			tri_print(t0);
+			tri_print(t1);
+		}
+		return 0;
 	default:
 		// no shared edge
 		return -1;
@@ -212,6 +213,60 @@ tri_find_z(
 }
 
 
+/*
+ * Find the barycentric coordinates for point of an XY coordinate in a triangle.
+ *
+ * p can be written as a combination of t01 and t02,
+ * p - t0 = a * (t1 - t0) + b * (t2 - t0)
+ * setting t0 to 0, this becomes:
+ * p = a * t1 + b * t2
+ * which is two equations with two unknowns
+ *
+ * The x and y coordinates are based on the two sides of the triangle
+ * and the z coordinate is the screen coordinate z in the triangle.
+ */
+v3_t
+tri_bary_coord(
+	const tri_t * const t,
+	const v3_t * const p
+)
+{
+	const float t1x = t->p[1].p[0] - t->p[0].p[0];
+	const float t1y = t->p[1].p[1] - t->p[0].p[1];
+	const float t1z = t->p[1].p[2] - t->p[0].p[2];
+	const float t2x = t->p[2].p[0] - t->p[0].p[0];
+	const float t2y = t->p[2].p[1] - t->p[0].p[1];
+	const float t2z = t->p[2].p[2] - t->p[0].p[2];
+	const float px = p->p[0] - t->p[0].p[0];
+	const float py = p->p[1] - t->p[0].p[1];
+
+	float a = (px * t2y - py * t2x) / (t1x * t2y - t2x * t1y);
+	float b = (px * t1y - py * t1x) / (t2x * t1y - t1x * t2y);
+	v3_t v = {{
+		a,
+		b,
+		t->p[0].p[2] + a * t1z + b * t2z,
+	}};
+
+	//v.p[2] = 1.0 - v.p[0] - v.p[1];
+
+	return v;
+}
+
+// Returns true if the bary centry point is inside the triangle
+// which means that a and b are non-negative and sum to less than 1
+int
+tri_bary_inside(
+	const v3_t p
+)
+{
+	const float a = p.p[0];
+	const float b = p.p[1];
+
+	return 0 <= a && 0 <= b && a + b <= 1;
+}
+
+
 /** Compute the points of intersection for two segments in 2d, and z points.
  *
  * This is a specialized ray intersection algorithm for the
@@ -235,18 +290,22 @@ hidden_intersect(
 	const float p0_x = p0->p[0];
 	const float p0_y = p0->p[1];
 	const float p0_z = p0->p[2];
+
 	const float p1_x = p1->p[0];
 	const float p1_y = p1->p[1]; 
 	const float p1_z = p1->p[2];
+
 	const float p2_x = p2->p[0];
 	const float p2_y = p2->p[1];
 	const float p2_z = p2->p[2];
+
 	const float p3_x = p3->p[0];
 	const float p3_y = p3->p[1];
 	const float p3_z = p3->p[2];
 
 	const float s1_x = p1_x - p0_x;
 	const float s1_y = p1_y - p0_y;
+
 	const float s2_x = p3_x - p2_x;
 	const float s2_y = p3_y - p2_y;
 
@@ -279,15 +338,12 @@ if(0) fprintf(stderr, "collision: %.0f,%.0f,%.0f->%.0f,%.0f,%.0f %.0f,%.0f,%.0f-
 		r1
 	);
 
-	const float ix = p0_x + (r0 * s1_x);
-	const float iy = p0_y + (r0 * s1_y);
-
 	// compute the z intercept for each on the two different coordinates
 	if(l0_int)
 	{
 		*l0_int = (v3_t){{
-			ix,
-			iy,
+			p0_x + r0 * s1_x,
+			p0_y + r0 * s1_y,
 			p0_z + r0 * (p1_z - p0_z)
 		}};
 	}
@@ -295,8 +351,8 @@ if(0) fprintf(stderr, "collision: %.0f,%.0f,%.0f->%.0f,%.0f,%.0f %.0f,%.0f,%.0f-
 	if(l1_int)
 	{
 		*l1_int = (v3_t){{
-			ix,
-			iy,
+			p2_x + r1 * s2_x,
+			p2_y + r1 * s2_y,
 			p2_z + r1 * (p3_z - p2_z)
 		}};
 	}
@@ -305,270 +361,7 @@ if(0) fprintf(stderr, "collision: %.0f,%.0f,%.0f->%.0f,%.0f,%.0f %.0f,%.0f,%.0f-
 }
 
 
-/*
- * Recursive algorithm:
- * Given a line segment and a list of triangles,
- * find if the line segment crosses any triangle.
- * If it crosses a triangle the segment will be shortened
- * and an additional one might be created.
- * Recusively try intersecting the new segment (starting at the same triangle)
- * and then continue trying the shortened segment.
- */
-
-void
-tri_seg_intersect(
-	const tri_t * zlist,
-	seg_t * s,
-	seg_t ** slist_visible
-)
-{
-	const float p0z = s->p[0].p[2];
-	const float p1z = s->p[1].p[2];
-	const float seg_max_z = max(p0z, p1z);
-
-	// avoid processing empty segments
-	const float seg_len = v3_len(&s->p[0], &s->p[1]);
-	if (seg_len < EPS)
-		return;
-
-static int recursive;
-recursive++;
-
-//fprintf(stderr, "%d: processing segment ", recursive); seg_print(s);
-	fprintf(stderr, "--- recursive %d\n", recursive);
-	seg_print(s);
-
-	for( const tri_t * t = zlist ; t ; t = t->next )
-	{
-		// if the segment is closer than the triangle,
-		// then we no longer have to check any further into
-		// the zlist (it is sorted by depth).
-		if (seg_max_z <= t->min[2])
-			break;
-
 #if 0
-		// make sure that we're not comparing to our own triangle
-		// or one that shares an edge with us (which might be in
-		// a different order)
-		if (v2_eq(s->src[0].p, t->p[0].p, 0.0005)
-		&&  v2_eq(s->src[1].p, t->p[1].p, 0.0005))
-			continue;
-		if (v2_eq(s->src[0].p, t->p[1].p, 0.0005)
-		&&  v2_eq(s->src[1].p, t->p[2].p, 0.0005))
-			continue;
-		if (v2_eq(s->src[0].p, t->p[2].p, 0.0005)
-		&&  v2_eq(s->src[1].p, t->p[0].p, 0.0005))
-			continue;
-		if (v2_eq(s->src[0].p, t->p[1].p, 0.0005)
-		&&  v2_eq(s->src[1].p, t->p[0].p, 0.0005))
-			continue;
-		if (v2_eq(s->src[0].p, t->p[2].p, 0.0005)
-		&&  v2_eq(s->src[1].p, t->p[1].p, 0.0005))
-			continue;
-		if (v2_eq(s->src[0].p, t->p[0].p, 0.0005)
-		&&  v2_eq(s->src[1].p, t->p[2].p, 0.0005))
-			continue;
-#endif
-
-		if (tri_debug >= 2)
-			tri_print(t);
-/*
-		// if the segment is co-linear to any of the
-		// triangle edges, include it
-		for(int i = 0 ; i < 3 ; i++)
-		{
-			if (parallel(
-				&s->p[0], &s->p[1],
-				&t->p[i], &t->p[(i+1)%3]
-			))
-				goto next_segment;
-		}
-*/
-
-		float z0, z1;
-		int inside0 = tri_find_z(t, &s->p[0], &z0);
-		int inside1 = tri_find_z(t, &s->p[1], &z1);
-
-		if (tri_debug >= 2 && (inside0 || inside1))
-		{
-			fprintf(stderr, "inside %d %d\n", inside0, inside1);
-		}
-
-		// if both are inside but the segment is infront of the
-		// triangle, then we retain the segment.
-		// otherwies we discard the segment
-		if (inside0 && inside1)
-		{
-			if (s->p[0].p[2] <= z0
-			&&  s->p[1].p[2] <= z1)
-				continue;
-			if (tri_debug >= 2)
-				fprintf(stderr, "BOTH INSIDE\n");
-			recursive--;
-			return;
-		}
-
-		// split the segment for each intersection with the
-		// triangle segments and add it to the work queue.
-		int intersections = 0;
-		v3_t is[3] = {}; // 3d point of segment intercept
-		v3_t it[3] = {}; // 3d point of triangle intercept
-
-		for(int j = 0 ; j < 3 ; j++)
-		{
-			float ratio = hidden_intersect(
-				&s->p[0], &s->p[1],
-				&t->p[j], &t->p[(j+1)%3],
-				&is[intersections],
-				&it[intersections]
-			);
-
-			if (ratio < 0)
-				continue;
-
-			if (tri_debug >= 2)
-				fprintf(stderr, "%d ratio=%.2f\n", j, ratio);
-			intersections++;
-		}
-
-
-		// if none of them intersect, we keep looking
-		if (intersections == 0)
-			continue;
-
-		if (tri_debug >= 2)
-			fprintf(stderr, "%d intersections\n", intersections);
-
-		if (intersections == 3)
-		{
-			// this likely means that the triangle is very, very
-			// small, so let's just ignore this triangle
-			if (tri_debug >= 2)
-				fprintf(stderr, "Three intersections\n");
-			continue;
-		}
-
-
-		if (intersections == 2)
-		{
-			// figure out how far it is to each of the intersections
-			const float d00 = v3_len(&s->p[0], &is[0]);
-			const float d01 = v3_len(&s->p[0], &is[1]);
-			const float d10 = v3_len(&s->p[1], &is[0]);
-			const float d11 = v3_len(&s->p[1], &is[1]);
-
-			if (tri_debug >= 2)
-				fprintf(stderr, "Two intersections\n");
-
-			// discard segments that have two interesections that match
-			// the segment exactly (distance from segment ends to
-			// intersection point close enough to zero).
-			if (d00 < EPS && d11 < EPS)
-			{
-				recursive--;
-				return;
-			}
-			if (d01 < EPS && d10 < EPS)
-			{
-				recursive--;
-				return;
-			}
-
-			// if the segment intersection is closer than the triangle,
-			// then we do nothing. degenerate cases are not handled
-			if (d00 <= d01
-			&& is[0].p[2] <= it[0].p[2]
-			&& is[1].p[2] <= it[1].p[2])
-				continue;
-			if (d00 > d01
-			&& is[1].p[2] <= it[0].p[2]
-			&& is[0].p[2] <= it[1].p[2])
-				continue;
-
-			// segment is behind the triangle,
-			// we have to create a new segment
-			// and shorten the existing segment
-			// find the two intersections that we have
-			// update the src field
-
-			// we need to create a new segment
-			seg_t * news;
-			if (d00 < d01)
-			{
-				// split from p0 to ix0
-				news = seg_new(s->p[0], is[0]);
-				news->src[0] = s->src[0];
-				news->src[1] = s->src[1];
-				s->p[0] = is[1];
-			} else {
-				// split from p0 to ix1
-				news = seg_new(s->p[0], is[1]);
-				news->src[0] = s->src[0];
-				news->src[1] = s->src[1];
-				s->p[0] = is[0];
-			}
-
-			// recursively start splitting the new segment
-			// starting at the next triangle down the z-depth
-			tri_seg_intersect(zlist->next, news, slist_visible);
-
-			// continue splitting our current segment
-			continue;
-		}
-
-		if (intersections == 1)
-		{
-			// if there is an intersection, but the segment intercept
-			// is closer than the triangle intercept, then no problem.
-			// we do not bother with degenerate cases of intersecting
-			// triangles
-			if (is[0].p[2] <= it[0].p[2]
-			&&  is[1].p[2] <= it[0].p[2])
-			{
-				//svg_line("#00FF00", s->p[0].p, s->p[1].p, 10);
-				continue;
-			}
-
-			if (inside0)
-			{
-				// shorten it on the 0 side
-				s->p[0] = is[0];
-// huh? shouldn't we process this one?
-return;
-				continue;
-			} else
-			if (inside1)
-			{
-				// shorten it on the 1 side
-				s->p[1] = is[0];
-// huh? shouldn't we process this one?
-return;
-				continue;
-			} else {
-				// both outside, but an intersection?
-				// split at that point and hope for the best
-				seg_t * const news = seg_new(s->p[0], is[0]);
-				news->src[0] = s->src[0];
-				news->src[1] = s->src[1];
-				s->p[0] = is[0];
-
-				tri_seg_intersect(zlist->next, news, slist_visible);
-				// continue splitting our current segment
-				continue;
-			}
-		}
-
-next_segment:
-		continue;
-	}
-
-	// if we've reached here the segment is visible
-	// and should be added to the visible list
-	s->next = *slist_visible;
-	*slist_visible = s;
-	recursive--;
-}
-
 
 /*
  * Fast check to see if t2 is entire occluded by t.
@@ -611,4 +404,324 @@ tri_behind(
 
 	// they are all on the same side
 	return 0;
+}
+#endif
+
+
+
+/*
+	tri_no_intersection,	// nothing changed
+	tri_infront,		// segment is in front of the triangle
+	tri_hidden,		// segment is completely occluded
+	tri_clipped,		// segment is partially occluded on one end
+	tri_split,		// segment is partially occluded in the middle
+*/
+tri_intersect_t
+tri_seg_intersect(
+	const tri_t * t,
+	seg_t * s,
+	seg_t ** new_seg // only if tri_split
+)
+{
+	// avoid processing nearly empty segments
+	const float seg_len = v3_len(&s->p[0], &s->p[1]);
+	if (seg_len < EPS)
+		return tri_hidden;
+
+	const v3_t p_max = v3_max(s->p[0], s->p[1]);
+	const v3_t p_min = v3_min(s->p[0], s->p[1]);
+
+	// if the segment is closer than the triangle,
+	// then we no longer have to check any further into
+	// the zlist (it is sorted by depth).
+	if (p_max.p[2] <= t->min.p[2])
+		return tri_infront;
+
+	// check for four quadrant outside the bounding box
+	// of the triangle min/max, which would have no chance
+	// of intersecting with the triangle
+	if (p_min.p[0] < t->min.p[0]
+	&&  p_max.p[0] < t->min.p[0])
+		return tri_no_intersection;
+	if (p_min.p[1] < t->min.p[1]
+	&&  p_max.p[1] < t->min.p[1])
+		return tri_no_intersection;
+	if (p_min.p[0] > t->max.p[0]
+	&&  p_max.p[0] > t->max.p[0])
+		return tri_no_intersection;
+	if (p_min.p[1] > t->max.p[1]
+	&&  p_max.p[1] > t->max.p[1])
+		return tri_no_intersection;
+
+	// there is a possibility that this line crosses the triangle
+	// compute the coordinates in triangle space
+	const v3_t tp0 = tri_bary_coord(t, &s->p[0]);
+	const v3_t tp1 = tri_bary_coord(t, &s->p[1]);
+
+	// if both are inside and not both on the same edge of
+	// the triangle, then the segment is totally hidden.
+	if (tri_bary_inside(tp0) && tri_bary_inside(tp1))
+	{
+		// if the segment z is closer than the triangle z
+		// then the segment is in front of the triangle
+		if (s->p[0].p[2] < tp0.p[2] && s->p[1].p[2] < tp1.p[2])
+			return tri_no_intersection;
+
+		// if the barycentric coord is 0 for the same edge
+		// for both points, then it is on the original line
+		if (tp0.p[0] < EPS && tp1.p[0] < EPS)
+			return tri_no_intersection;
+		if (tp0.p[1] < EPS && tp1.p[1] < EPS)
+			return tri_no_intersection;
+
+		// compute the third barycentric coordinate and check
+		float c0 = 1.0 - tp0.p[0] - tp0.p[1];
+		float c1 = 1.0 - tp1.p[0] - tp1.p[1];
+		if (c0 < EPS && c1 < EPS)
+			return tri_no_intersection;
+
+		// it is not on an edge and not infront of the triangle
+		// so the segment is totally occluded
+		return tri_hidden;
+	}
+
+	// find the intersection point for each of the three
+	// sides of the triangle
+	v3_t is[3] = {}; // 3d point of segment intercept
+	v3_t it[3] = {}; // 3d point of triangle intercept
+	float ratio[3] = {}; // length along the line
+	int intersections = 0;
+
+	for(int j = 0 ; j < 3 ; j++)
+	{
+		ratio[intersections] = hidden_intersect(
+			&s->p[0], &s->p[1],
+			&t->p[j], &t->p[(j+1)%3],
+			&is[intersections],
+			&it[intersections]
+		);
+
+		if (ratio[intersections] < 0)
+			continue;
+
+		// if the segment intersection is closer than the
+		// triangle intersection, this does not count as
+		// an intersection and we can ignore it.
+		if (is[intersections].p[2] < it[intersections].p[2])
+			continue;
+
+		if (tri_debug >= 2)
+		{
+			fprintf(stderr, "%d ratio=%.2f %+6.1f", j, ratio[intersections], it[intersections].p[2]);
+			v3_print(is[intersections]);
+		}
+		intersections++;
+	}
+
+	// check for duplicate intersections, which happens if
+	// the lines go through at precisely the corners
+	// this might mean that we hit exactly at one
+	// point and two of the points are the same
+	if (intersections == 3)
+	{
+		if (v3_eq(is[0], is[2]))
+			intersections--;
+		else
+		if (v3_eq(is[1], is[2]))
+			intersections--;
+		else
+		if (v3_eq(is[0], is[1]))
+		{
+			intersections--;
+			is[1] = is[2];
+			it[1] = it[2];
+		}
+	}
+
+	if (intersections == 2 && v3_eq(is[0], is[1]))
+		intersections--;
+
+	// no intersections? there is nothing to do
+	if (intersections == 0)
+		return tri_no_intersection;
+
+	// three intersections? maybe a very small triangle
+ 	if (intersections == 3)
+	{
+		fprintf(stderr, "THREE INTERSECTIONS?\n");
+		fprintf(stderr, "is0="); v3_print(is[0]);
+		fprintf(stderr, "is1="); v3_print(is[1]);
+		fprintf(stderr, "is2="); v3_print(is[2]);
+		svg_line("#0000FF", s->p[0].p, s->p[1].p, 8);
+		return tri_no_intersection;
+	}
+
+	if (intersections == 1)
+	{
+		if (tri_bary_inside(tp0))
+		{
+			// if the intercept point on the segment is
+			// closer than the intercept point on the triangle edge,
+			// then there is no occlusion
+			if (is[0].p[2] <= it[0].p[2])
+				return tri_no_intersection;
+
+			// clipped from intersection to p1
+			s->p[0] = is[0];
+			return tri_clipped;
+		}
+
+		if (tri_bary_inside(tp1))
+		{
+			// if the intercept point on the segment is
+			// closer than the intercept point on the triangle edge,
+			// then there is no occlusion
+			if (is[0].p[2] < it[0].p[2])
+				return tri_no_intersection;
+
+			// clipped from p0 to intersection
+			s->p[1] = is[0];
+			return tri_clipped;
+		}
+
+		// something isn't right. maybe we have a small triangle?
+		fprintf(stderr, "ONE INTERSECTION?");
+/*
+		svg_line("#FFFF00", s->p[0].p, s->p[1].p, 20);
+		svg_line("#000080", t->p[0].p, t->p[1].p, 8);
+		svg_line("#000080", t->p[1].p, t->p[2].p, 8);
+		svg_line("#000080", t->p[2].p, t->p[0].p, 8);
+*/
+		seg_print(s);
+		v3_print(tp0);
+		v3_print(tp1);
+		tri_print(t);
+		*new_seg = seg_new(is[0], s->p[1]);
+		s->p[1] = is[0];
+		return tri_split;
+	}
+
+	// two intersections: find the one that is closer to p0
+	// modify the existing segment and create a new segment
+	const float d00 = v3_mag2(v3_sub(is[0], s->p[0]));
+	const float d01 = v3_mag2(v3_sub(is[1], s->p[0]));
+	const float d10 = v3_mag2(v3_sub(is[0], s->p[1]));
+	const float d11 = v3_mag2(v3_sub(is[1], s->p[1]));
+
+	// if any of the intersections points are zero from an
+	// end point on the segment, then skip that part
+	if (tri_debug > 4)
+	{
+		seg_print(s);
+		tri_print(t);
+		fprintf(stderr, "d: %f %f %f %f\n", d00, d01, d10, d11);
+	}
+
+	if (d00 < EPS && d11 < EPS)
+		return tri_hidden;
+	if (d01 < EPS && d10 < EPS)
+		return tri_hidden;
+	
+	if (d00 < EPS)
+	{
+		s->p[0] = is[1];
+		return tri_clipped;
+	} else
+	if (d01 < EPS)
+	{
+		s->p[0] = is[0];
+		return tri_clipped;
+	} else
+	if (d10 < EPS)
+	{
+		s->p[1] = is[1];
+		return tri_clipped;
+	} else
+	if (d11 < EPS)
+	{
+		s->p[1] = is[0];
+		return tri_clipped;
+	}
+
+	// neither end points match, so create a new segment
+	// that excludes the space covered by the triangle.
+	// determine which is closer to point is[0]
+	if (d00 < d01)
+	{
+		// p0 is closer to is0, so new segment is is1 to p1
+		*new_seg = seg_new(is[1], s->p[1]);
+		s->p[1] = is[0];
+	} else {
+		// p0 is closer to is1, so new segment is is0 to p1
+		*new_seg = seg_new(is[0], s->p[1]);
+		s->p[1] = is[1];
+	}
+
+fprintf(stderr, "SPLIT: ");
+seg_print(*new_seg);
+	return tri_split;
+}
+
+
+int
+tri_seg_hidden(
+	const tri_t * zlist,
+	seg_t * s,
+	seg_t ** slist_visible
+)
+{
+	int count = 0;
+	fprintf(stderr, "TEST: ");
+	seg_print(s);
+
+	for( const tri_t * t = zlist ; t ; t = t->next )
+	{
+		seg_t * new_seg = NULL;
+		//tri_print(t);
+		tri_intersect_t type = tri_seg_intersect(t, s, &new_seg);
+		//fprintf(stderr, "rc=%d\n", type);
+
+		// if there is no intersection or if the segment has
+		// been clipped on one side, keep looking
+		if (type == tri_no_intersection)
+			continue;
+		if (type == tri_clipped)
+		{
+			//fprintf(stderr, "CLIP: ");
+			seg_print(s);
+			continue;
+		}
+
+		// if this segment is infront of this triangle then we can
+		// stop searching
+		if (type == tri_infront)
+			break;
+
+		// if this segment is totally occluded, we're done
+		if (type == tri_hidden)
+			return count;
+
+		// if this line has been split into two, process the
+		// new segment starting at the next triangle since it
+		// has already intersected this one
+		if (type == tri_split)
+		{
+			static int recursive;
+			if (tri_debug > 4) fprintf(stderr, "RECURSIVE %d\n", recursive++);
+			int new_count = tri_seg_hidden(t->next, new_seg, slist_visible);
+			if (tri_debug > 4) fprintf(stderr, "END %d: %d segments\n", --recursive, new_count);
+			if (tri_debug > 4) fprintf(stderr, "CLIP: ");
+			if (tri_debug > 4) seg_print(s);
+			count += new_count;
+			continue;
+		}
+
+		fprintf(stderr, "unknown type %d\n", type);
+		return -1;
+	}
+
+	// we've reached the end and it is still visible
+	s->next = *slist_visible;
+	*slist_visible = s;
+	return ++count;
 }

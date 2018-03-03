@@ -92,7 +92,7 @@ edge_eq2(
 	const v3_t * const v10 = &t1->p[e1];
 	const v3_t * const v11 = &t1->p[(e1+1) % 3];
 
-	if (v3_eq(v00, v11) && v3_eq(v01, v10))
+	if (v3_eq(*v00, *v11) && v3_eq(*v01, *v10))
 		return 1;
 
 	return 0;
@@ -613,11 +613,11 @@ coplanar_check(
 	for (int i = 0 ; i < 3 ; i++)
 	{
 		x4 = f2->p[i];
-		if (v3_eq(&x1, &x4))
+		if (v3_eq(x1, x4))
 			continue;
-		if (v3_eq(&x2, &x4))
+		if (v3_eq(x2, x4))
 			continue;
-		if (v3_eq(&x3, &x4))
+		if (v3_eq(x3, x4))
 			continue;
 		break;
 	}

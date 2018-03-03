@@ -34,15 +34,17 @@ seg_print(
 	const seg_t * const s
 )
 {
-	fprintf(stderr, "%.0f,%.0f -> %.0f,%.0f (was %.0f,%.0f -> %.0f,%.0f)\n",
+	fprintf(stderr, "%+5.1f,%+5.1f,%5.1f -> %+5.1f,%+5.1f,%5.1f\n",
 		s->p[0].p[0],
 		s->p[0].p[1],
+		s->p[0].p[2],
 		s->p[1].p[0],
 		s->p[1].p[1],
-		s->src[0].p[0],
-		s->src[0].p[1],
-		s->src[1].p[0],
-		s->src[1].p[1]
+		s->p[1].p[2]
+		//s->src[0].p[0],
+		//s->src[0].p[1],
+		//s->src[1].p[0],
+		//s->src[1].p[1]
 	);
 }
 

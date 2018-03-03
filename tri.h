@@ -6,6 +6,7 @@
 
 #include "v3.h"
 #include "seg.h"
+#include "svg.h"
 
 extern int tri_debug;
 
@@ -15,8 +16,8 @@ struct _tri_t
 	v3_t p[3]; // camera space
 	v3_t normal; // camera space
 	v3_t normal_xyz; // original xyz space
-	float min[3]; // camera space
-	float max[3]; // camera space
+	v3_t min; // camera space
+	v3_t max; // camera space
 	tri_t * next;
 	tri_t ** prev;
 };
@@ -108,17 +109,18 @@ hidden_intersect(
 
 
 /*
- * Recursive algorithm:
  * Given a line segment and a list of triangles,
  * find if the line segment crosses any triangle.
  * If it crosses a triangle the segment will be shortened
  * and an additional one might be created.
  * Recusively try intersecting the new segment (starting at the same triangle)
  * and then continue trying the shortened segment.
+ *
+ * Line segments will be added to the visible list.
+ * Returns the number of new elements created
  */
-
-void
-tri_seg_intersect(
+int
+tri_seg_hidden(
 	const tri_t * zlist,
 	seg_t * s,
 	seg_t ** slist_visible
@@ -132,6 +134,32 @@ int
 tri_behind(
 	const tri_t * const t,
 	const tri_t * const t2
+);
+
+
+/*
+ * There are four possible line/triangle intersections.
+ */
+typedef enum {
+	tri_no_intersection,	// nothing changed
+	tri_infront,		// segment is in front of the triangle
+	tri_hidden,		// segment is completely occluded
+	tri_clipped,		// segment is partially occluded on one end
+	tri_split,		// segment is partially occluded in the middle
+} tri_intersect_t;
+
+
+tri_intersect_t
+tri_seg_intersect(
+	const tri_t * tri,
+	seg_t * s,
+	seg_t ** new_seg // only if tri_split
+);
+
+v3_t
+tri_bary_coord(
+	const tri_t * const t,
+	const v3_t * const p
 );
 
 #endif

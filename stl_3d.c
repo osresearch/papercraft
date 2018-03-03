@@ -38,7 +38,7 @@ stl_vertex_find(
 	{
 		stl_vertex_t * const v = &vertices[x];
 
-		if (v3_eq(&v->p, p))
+		if (v3_eq(v->p, *p))
 			return v;
 	}
 
@@ -95,11 +95,11 @@ stl_angle(
 	for (int i = 0 ; i < 3 ; i++)
 	{
 		x4 = f2->vertex[i]->p;
-		if (v3_eq(&x1, &x4))
+		if (v3_eq(x1, x4))
 			continue;
-		if (v3_eq(&x2, &x4))
+		if (v3_eq(x2, x4))
 			continue;
-		if (v3_eq(&x3, &x4))
+		if (v3_eq(x3, x4))
 			continue;
 		break;
 	}

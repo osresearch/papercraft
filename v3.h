@@ -5,9 +5,10 @@
 #define _papercraft_v3_h_
 
 #include <math.h>
+#include <stdio.h>
 #include <stdlib.h>
 
-#define EPS 0.001
+#define EPS 0.00001
 
 #ifndef M_PI
 #define 	M_PI   3.1415926535897932384
@@ -52,13 +53,13 @@ typedef struct
 
 static inline int
 v3_eq(
-	const v3_t * v1,
-	const v3_t * v2
+	const v3_t v1,
+	const v3_t v2
 )
 {
-	float dx = v1->p[0] - v2->p[0];
-	float dy = v1->p[1] - v2->p[1];
-	float dz = v1->p[2] - v2->p[2];
+	float dx = v1.p[0] - v2.p[0];
+	float dy = v1.p[1] - v2.p[1];
+	float dz = v1.p[2] - v2.p[2];
 
 	if (-EPS < dx && dx < EPS
 	&&  -EPS < dy && dy < EPS
@@ -209,6 +210,36 @@ v3_cross(
 }
 
 
+static inline v3_t
+v3_min(
+	const v3_t a,
+	const v3_t b
+)
+{
+	v3_t c = { {
+		min(a.p[0], b.p[0]),
+		min(a.p[1], b.p[1]),
+		min(a.p[2], b.p[2]),
+	}};
+	return c;
+}
+
+
+static inline v3_t
+v3_max(
+	const v3_t a,
+	const v3_t b
+)
+{
+	v3_t c = { {
+		max(a.p[0], b.p[0]),
+		max(a.p[1], b.p[1]),
+		max(a.p[2], b.p[2]),
+	}};
+	return c;
+}
+
+
 // Compute the length of a line in screen space, ignoring Z
 static inline float
 v3_dist_2d(
@@ -222,5 +253,58 @@ v3_dist_2d(
 	return sqrt(dx*dx + dy*dy);
 }
 
+
+static inline void
+v3_print(const v3_t p)
+{
+	fprintf(stderr, "%+6.1f %+6.1f %+6.1f\n",
+		p.p[0],
+		p.p[1],
+		p.p[2]
+	);
+}
+
+typedef struct {
+	float p[4];
+} v4_t;
+
+typedef struct {
+	float m[4][4];
+} m44_t;
+
+
+static inline void
+m44_mult(
+	m44_t * r,
+	const m44_t * a,
+	const m44_t * b
+)
+{
+	for(int i = 0 ; i < 4 ; i++)
+	{
+		for(int j = 0 ; j < 4 ; j++)
+		{
+			float d = 0;
+			for(int k = 0 ; k < 4 ; k++)
+				d += a->m[i][k] * b->m[k][j];
+			r->m[i][j] = d;
+		}
+	}
+}
+
+
+static inline v4_t
+m44_multv(
+	const m44_t * const m,
+	const v4_t * const v
+)
+{
+	v4_t p = {};
+	for (int i = 0 ; i < 4 ; i++)
+		for (int j = 0 ; j < 4 ; j++)
+			p.p[i] += m->m[i][j] * v->p[j];
+
+	return p;
+}
 
 #endif

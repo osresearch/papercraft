@@ -18,6 +18,7 @@ static int debug = 0;
 #include "v3.h"
 #include "tri.h"
 #include "camera.h"
+#include "svg.h"
 
 
 static const char usage[] =
@@ -76,25 +77,6 @@ typedef struct
 stl_face_t;
 
 
-
-void
-svg_line(
-	const char * color,
-	const float * p1,
-	const float * p2,
-	float thick
-)
-{
-	// invert the sense of y
-	printf("<line x1=\"%fpx\" y1=\"%fpx\" x2=\"%fpx\" y2=\"%fpx\" stroke=\"%s\" stroke-width=\"%.1fpx\"/>\n",
-		p1[0],
-		-p1[1],
-		p2[0],
-		-p2[1],
-		color,
-		thick
-	);
-}
 
 
 static inline int
@@ -302,11 +284,6 @@ int main(
 				behind++;
 				goto reject_early;
 			}
-
-			// scale to the image size
-			s[j].p[0] *= width;
-			s[j].p[1] *= width;
-			s[j].p[2] *= width;
 		}
 
 		if(debug >= 2)
@@ -326,7 +303,7 @@ int main(
 		tri_t * const tri = tri_new(s, stl->p);
 
 		// reject this face if any of the vertices are behind us
-		if (tri->min[2] < 0)
+		if (tri->min.p[2] < 0)
 		{
 			behind++;
 			goto reject;
@@ -342,6 +319,7 @@ int main(
 		}
 
 		// if it has any off-screen coords, reject it
+/*
 		if (!onscreen(&tri->p[0], width, height)
 		||  !onscreen(&tri->p[1], width, height)
 		||  !onscreen(&tri->p[2], width, height))
@@ -350,6 +328,7 @@ tri_print(tri);
 			offscreen++;
 			goto reject;
 		}
+*/
 
 		// prune the small triangles in the screen space
 		if (tri_area_2d(tri) < prune)
@@ -378,6 +357,8 @@ reject:
 reject_early:
 		continue;
 	}
+	for(tri_t * t = zlist ; t ; t = t->next)
+		tri_print(t);
 
 	if (debug)
 		fprintf(stderr, "Retained %d triangles, rejected %d behind, %d offscreen, %d backface, %d small\n", retained, behind, offscreen, backface, small_area);
@@ -385,6 +366,7 @@ reject_early:
 	// drop any triangles that are totally occluded by another
 	// triangle.  this reduces the amount of work for later
 	rejected = 0;
+#if 0
 	for(tri_t * t = zlist ; t ; t = t->next)
 	{
 		tri_t * t2_next;
@@ -405,6 +387,7 @@ reject_early:
 	}
 	if (debug)
 		fprintf(stderr, "Rejected %d fully occluded triangles\n", rejected);
+#endif
 
 
 	// generate a list of segments, dropping any coplanar ones
@@ -469,7 +452,7 @@ reject_early:
 			seg_t * s = slist;
 			slist = s->next;
 
-			tri_seg_intersect(zlist, s, &slist_visible);
+			tri_seg_hidden(zlist, s, &slist_visible);
 		}
 	} else {
 		// don't do any intersection tests
