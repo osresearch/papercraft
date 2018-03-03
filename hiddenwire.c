@@ -319,16 +319,13 @@ int main(
 		}
 
 		// if it has any off-screen coords, reject it
-/*
 		if (!onscreen(&tri->p[0], width, height)
 		||  !onscreen(&tri->p[1], width, height)
 		||  !onscreen(&tri->p[2], width, height))
 		{
-tri_print(tri);
 			offscreen++;
 			goto reject;
 		}
-*/
 
 		// prune the small triangles in the screen space
 		if (tri_area_2d(tri) < prune)
@@ -357,6 +354,8 @@ reject:
 reject_early:
 		continue;
 	}
+
+	if (debug > 3)
 	for(tri_t * t = zlist ; t ; t = t->next)
 		tri_print(t);
 
@@ -366,7 +365,6 @@ reject_early:
 	// drop any triangles that are totally occluded by another
 	// triangle.  this reduces the amount of work for later
 	rejected = 0;
-#if 0
 	for(tri_t * t = zlist ; t ; t = t->next)
 	{
 		tri_t * t2_next;
@@ -387,7 +385,6 @@ reject_early:
 	}
 	if (debug)
 		fprintf(stderr, "Rejected %d fully occluded triangles\n", rejected);
-#endif
 
 
 	// generate a list of segments, dropping any coplanar ones
@@ -446,7 +443,7 @@ reject_early:
 		int processed = 0;
 		while(slist)
 		{
-			if (debug && ++processed % 1 == 0)
+			if (debug && ++processed % 1000 == 0)
 				fprintf(stderr, "Hidden %d\n", processed);
 
 			seg_t * s = slist;

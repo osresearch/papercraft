@@ -361,8 +361,6 @@ if(0) fprintf(stderr, "collision: %.0f,%.0f,%.0f->%.0f,%.0f,%.0f %.0f,%.0f,%.0f-
 }
 
 
-#if 0
-
 /*
  * Fast check to see if t2 is entire occluded by t.
  */
@@ -405,7 +403,6 @@ tri_behind(
 	// they are all on the same side
 	return 0;
 }
-#endif
 
 
 
@@ -657,8 +654,11 @@ tri_seg_intersect(
 		s->p[1] = is[1];
 	}
 
-fprintf(stderr, "SPLIT: ");
-seg_print(*new_seg);
+	if (tri_debug > 3)
+	{
+		fprintf(stderr, "SPLIT: ");
+		seg_print(*new_seg);
+	}
 	return tri_split;
 }
 
@@ -671,15 +671,16 @@ tri_seg_hidden(
 )
 {
 	int count = 0;
-	fprintf(stderr, "TEST: ");
-	seg_print(s);
+	if (tri_debug > 2)
+	{
+		fprintf(stderr, "TEST: ");
+		seg_print(s);
+	}
 
 	for( const tri_t * t = zlist ; t ; t = t->next )
 	{
 		seg_t * new_seg = NULL;
-		//tri_print(t);
 		tri_intersect_t type = tri_seg_intersect(t, s, &new_seg);
-		//fprintf(stderr, "rc=%d\n", type);
 
 		// if there is no intersection or if the segment has
 		// been clipped on one side, keep looking
@@ -687,8 +688,7 @@ tri_seg_hidden(
 			continue;
 		if (type == tri_clipped)
 		{
-			//fprintf(stderr, "CLIP: ");
-			seg_print(s);
+			//seg_print(s);
 			continue;
 		}
 
@@ -707,11 +707,11 @@ tri_seg_hidden(
 		if (type == tri_split)
 		{
 			static int recursive;
-			if (tri_debug > 4) fprintf(stderr, "RECURSIVE %d\n", recursive++);
-			int new_count = tri_seg_hidden(t->next, new_seg, slist_visible);
-			if (tri_debug > 4) fprintf(stderr, "END %d: %d segments\n", --recursive, new_count);
-			if (tri_debug > 4) fprintf(stderr, "CLIP: ");
-			if (tri_debug > 4) seg_print(s);
+			int new_count = tri_seg_hidden(
+				t->next,
+				new_seg,
+				slist_visible
+			);
 			count += new_count;
 			continue;
 		}

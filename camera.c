@@ -158,7 +158,5 @@ camera_project(
 	v_out->p[1] = p.p[1];
 	v_out->p[2] = p.p[2];
 
-	v3_print(*v_out);
-
 	return 1;
 }
