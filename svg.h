@@ -10,7 +10,7 @@ svg_line(
 )
 {
 	// invert the sense of y
-	printf("<line x1=\"%fpx\" y1=\"%fpx\" x2=\"%fpx\" y2=\"%fpx\" stroke=\"%s\" stroke-width=\"%.1fpx\"/>\n",
+	printf("<line x1=\"%fpx\" y1=\"%fpx\" x2=\"%fpx\" y2=\"%fpx\" style=\"stroke:%s;stroke-width=%.1f;fill:none\"/>\n",
 		p1[0],
 		-p1[1],
 		p2[0],
