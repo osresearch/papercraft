@@ -263,7 +263,7 @@ tri_bary_inside(
 	const float a = p.p[0];
 	const float b = p.p[1];
 
-	return 0 <= a && 0 <= b && a + b <= 1;
+	return 0 <= a && 0 <= b && a + b <= 1+EPS;
 }
 
 
@@ -573,7 +573,7 @@ tri_seg_intersect(
 			// if the intercept point on the segment is
 			// closer than the intercept point on the triangle edge,
 			// then there is no occlusion
-			if (is[0].p[2] < it[0].p[2])
+			if (is[0].p[2] <= it[0].p[2])
 				return tri_no_intersection;
 
 			// clipped from p0 to intersection
@@ -581,14 +581,15 @@ tri_seg_intersect(
 			return tri_clipped;
 		}
 
-		// something isn't right. maybe we have a small triangle?
-		fprintf(stderr, "ONE INTERSECTION?");
+		// maybe we have a small triangle or a tangent.
+		// in which case the line is fine
+		return tri_no_intersection;
 /*
+		fprintf(stderr, "ONE INTERSECTION?");
 		svg_line("#FFFF00", s->p[0].p, s->p[1].p, 20);
 		svg_line("#000080", t->p[0].p, t->p[1].p, 8);
 		svg_line("#000080", t->p[1].p, t->p[2].p, 8);
 		svg_line("#000080", t->p[2].p, t->p[0].p, 8);
-*/
 		seg_print(s);
 		v3_print(tp0);
 		v3_print(tp1);
@@ -596,6 +597,7 @@ tri_seg_intersect(
 		*new_seg = seg_new(is[0], s->p[1]);
 		s->p[1] = is[0];
 		return tri_split;
+*/
 	}
 
 	// two intersections: find the one that is closer to p0
