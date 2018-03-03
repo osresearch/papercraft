@@ -16,7 +16,10 @@ unfold: unfold.o
 wireframe: wireframe.o
 corners: corners.o stl_3d.o
 faces: faces.o stl_3d.o
-hiddenwire: hiddenwire.o camera.o
+hiddenwire: hiddenwire.o camera.o tri.o
+
+# Test the triangle intersection code
+test-intersect: test-intersect.o tri.o
 
 clean:
 	$(RM) *.o

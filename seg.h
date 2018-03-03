@@ -10,7 +10,7 @@ struct _seg_t {
 	seg_t * next;
 };
 
-seg_t *
+static inline seg_t *
 seg_new(
 	const v3_t p0,
 	const v3_t p1
@@ -29,7 +29,7 @@ seg_new(
 }
 
 
-void
+static inline void
 seg_print(
 	const seg_t * const s
 )
