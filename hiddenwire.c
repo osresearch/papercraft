@@ -151,10 +151,8 @@ int onscreen(
 {
 	if (p->p[0] < -width/2 || width/2 < p->p[0])
 		return 0;
-/*
 	if (p->p[1] < -height/2 || height/2 < p->p[1])
 		return 0;
-*/
 	return 1;
 }
 
@@ -180,8 +178,8 @@ int main(
 	float scale = 1;
 	float fov = 45;
 	float prune = 0.1;
-	float width = 1000;
-	float height = 1000;
+	float width = 3000;
+	float height = 2000;
 
 	while((opt = getopt_long(argc, argv ,"h?vBCHc:l:s:u:p:F:", long_options, NULL)) != -1)
 	{
